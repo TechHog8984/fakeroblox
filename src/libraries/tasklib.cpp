@@ -1,0 +1,311 @@
+#include "libraries/tasklib.hpp"
+#include "common.hpp"
+#include "lua.h"
+#include "lualib.h"
+#include "luacode.h"
+
+#include <algorithm>
+#include <cstring>
+#include <optional>
+#include <unordered_map>
+#include <utility>
+#include <variant>
+#include <vector>
+
+namespace fakeroblox {
+
+const char* taskStatusTostring(TaskStatus status) {
+    switch (status) {
+        case RUNNING:
+            return "running";
+        case YIELDING:
+            return "yielding";
+        case WAITING:
+            return "waiting";
+        case DEFERRING:
+            return "deferring";
+        case DELAYING:
+            return "delaying";
+        default:
+            return "unknown";
+    }
+};
+
+std::vector<Task*> TaskScheduler::task_queue;
+std::unordered_map<lua_State*, Task*> TaskScheduler::task_map;
+
+void TaskScheduler::queueTask(Task* task) {
+    // FIXME: synchronize
+    task_queue.push_back(task);
+}
+
+//                yielding? / error
+typedef std::variant<bool, std::string> ThreadResumeResult;
+
+ThreadResumeResult resumeThread(lua_State* L, Task* task);
+
+void TaskScheduler::resumeTask(lua_State *L, Task* task) {
+    // FIXME: synchronize
+    task_queue.erase(std::find(task_queue.begin(), task_queue.end(), task));
+
+    if (task->canceled)
+        return;
+
+    ThreadResumeResult result = resumeThread(L, task);
+    if (std::holds_alternative<bool>(result)) { // success
+        if (!std::get<bool>(result)) // yielding
+            killTask(L, task);
+    } else
+      task->feedback(std::string("failed to resume thread: ").append(std::get<std::string>(result)));
+}
+
+void TaskScheduler::killTask(lua_State* L, Task* task) {
+    // FIXME: synchronize
+
+    // FIXME: what if we already iterated to a task in the queue and then it gets removed?
+    auto task_queue_position = std::find(task_queue.begin(), task_queue.end(), task);
+    if (task_queue_position != task_queue.end())
+        task_queue.erase(task_queue_position);
+
+    lua_State* thread = task->thread;
+    int thread_ref = task->thread_ref;
+
+    task_map.erase(task_map.find(thread));
+    lua_unref(L, thread_ref);
+    // lua_gc(L, LUA_GCSTEP, 0);
+    delete task;
+}
+
+void TaskScheduler::run(lua_State* L) {
+    // FIXME: synchronize
+    std::vector<Task*> filtered_tasks;
+    filtered_tasks.reserve(task_queue.size());
+    for (size_t i = 0; i < task_queue.size(); i++) {
+        Task* task = task_queue[i];
+        assert(task->status != RUNNING);
+
+        bool passes = false;
+        TaskTiming timing = task->timing;
+
+        switch (timing.type) {
+            case TaskTiming::Instant:
+                passes = true;
+                break;
+            case TaskTiming::Seconds:
+                double clock = lua_clock();
+                passes = clock >= timing.end_time;
+                break;
+        }
+
+        if (passes)
+            filtered_tasks.push_back(task);
+    }
+
+    for (size_t i = 0; i < filtered_tasks.size(); i++)
+        resumeTask(L, filtered_tasks[i]);
+}
+
+void TaskScheduler::cleanup(lua_State* L) {
+    for (auto& pair : task_map)
+        killTask(L, pair.second);
+    task_map.clear();
+}
+
+ThreadResumeResult resumeThread(lua_State* L, Task* task) {
+    task->status = RUNNING;
+    lua_State* thread = task->thread;
+    int status = lua_resume(thread, L, task->arg_count);
+
+    switch (status) {
+        case LUA_OK:
+            return false;
+        case LUA_YIELD:
+            return true;
+        case LUA_ERRRUN: {
+            const char* str = lua_tostring(thread, -1);
+            std::string msg = str == nullptr ? "unknown" : str;
+            lua_pop(thread, 1);
+            return msg;
+        }
+        default: {
+            std::string msg = "unexpected status: ";
+            switch (status) {
+                case LUA_ERRSYNTAX:
+                    msg.append("ERRSYNTAX");
+                    break;
+                case LUA_ERRMEM:
+                    msg.append("ERRMEM");
+                    break;
+                case LUA_ERRERR:
+                    msg.append("ERRERR");
+                    break;
+                default:
+                    break;
+            }
+            return msg;
+        }
+    }
+}
+
+std::pair<lua_State*, Task*> createThread(lua_State* L, Feedback feedback) {
+    lua_State* thread = lua_newthread(L);
+    int thread_ref = lua_ref(L, -1);
+    luaL_sandboxthread(thread);
+
+    Task* task = new Task(thread, thread_ref, feedback, {});
+
+    return std::make_pair(thread, task);
+}
+std::optional<std::string> tryRunThreadMain(lua_State* L, Task* task) {
+    if (task->canceled)
+        return std::nullopt;
+
+    ThreadResumeResult result = resumeThread(L, task);
+    if (std::holds_alternative<bool>(result)) { // success
+        if (!std::get<bool>(result)) // yielding
+            TaskScheduler::killTask(L, task);
+        return std::nullopt;
+    }
+
+    TaskScheduler::killTask(L, task);
+    return std::string("failed to start thread: ").append(std::get<std::string>(result));
+}
+
+std::optional<std::string> tryRunCode(lua_State* L, const char* source, Feedback feedback) {
+    auto thread_pair = createThread(L, feedback);
+    lua_pop(L, 1);
+    lua_State* thread = thread_pair.first;
+    Task* task = thread_pair.second;
+
+    size_t bytecode_size = 0;
+    char* bytecode = luau_compile(source, std::strlen(source), NULL, &bytecode_size);
+    if (!bytecode) {
+        TaskScheduler::killTask(L, task);
+        return "failed to allocate memory for compiled bytecode";
+    }
+
+    int r = luau_load(thread, "", bytecode, bytecode_size, 0);
+    free(bytecode);
+    if (r) {
+        TaskScheduler::killTask(L, task);
+
+        std::string msg = std::string("failed to load chunk: ")
+            .append(lua_tostring(thread, -1));
+        lua_pop(thread, 1);
+        return msg;
+    }
+
+    task->arg_count = 0;
+    return tryRunThreadMain(L, task);
+}
+
+class PreSpawnResult {
+public:
+    lua_State* thread = nullptr;
+    int arg_count = 0;
+    Task* task = nullptr;
+};
+
+std::optional<PreSpawnResult> preTaskSpawn(lua_State* L, const char* func_name, int arg_offset) {
+    Task* parent_task = TaskScheduler::task_map.at(L);
+
+    int arg1 = 1 + arg_offset;
+    luaL_checkany(L, arg1);
+    int arg1_type = lua_type(L, arg1);
+    luaL_argcheck(L, arg1_type == LUA_TFUNCTION || arg1_type == LUA_TTHREAD, arg1, "expected function or thread");
+
+    lua_State* thread;
+    Task* task;
+
+    int arg_count = lua_gettop(L) - arg_offset;
+
+    switch (arg1_type) {
+        case LUA_TTHREAD: {
+            thread = lua_tothread(L, arg1);
+            if (TaskScheduler::task_map.find(thread) == TaskScheduler::task_map.end()) {
+                luaL_error(L, "failed to get task from thread");
+                return std::nullopt;
+            }
+            task = TaskScheduler::task_map[thread];
+
+            TaskStatus status = task->status;
+            switch (status) {
+                case RUNNING:
+                case YIELDING:
+                    break;
+                case WAITING:
+                case DEFERRING:
+                case DELAYING:
+                    luaL_error(L, "attempt to call %s on a thread that is %s", func_name, taskStatusTostring(status));
+                    return std::nullopt;
+            }
+            break;
+        }
+        case LUA_TFUNCTION: {
+            auto thread_pair = createThread(L, parent_task->feedback);
+            thread = thread_pair.first;
+            task = thread_pair.second;
+            break;
+        }
+        default:
+            __builtin_unreachable();
+    }
+
+    for (int i = arg1; i < lua_gettop(L); i++) {
+        lua_xpush(L, thread, arg1);
+        lua_remove(L, arg1);
+    }
+
+    return PreSpawnResult{ .thread = thread, .arg_count = arg_count, .task = task  };
+}
+
+static int fakeroblox_task_wait(lua_State* L) {
+    Task* task = TaskScheduler::task_map.at(L);
+
+    double seconds = luaL_optnumber(L, 1, 0.0);
+    luaL_argcheck(L, seconds >= 0.0, 1, "seconds must be positive");
+
+    task->status = WAITING;
+    task->timing = TaskTiming { .type = TaskTiming::Seconds, .end_time = lua_clock() + seconds };
+    task->arg_count = 0;
+    TaskScheduler::queueTask(task);
+
+    return lua_yield(L, 1);
+}
+
+static int fakeroblox_task_spawn(lua_State* L) {
+    auto result = preTaskSpawn(L, "spawn", 0);
+    if (!result.has_value())
+        return 0;
+
+    int arg_count = result->arg_count;
+    Task* task = result->task;
+
+    task->arg_count = arg_count - 1;
+    auto error = tryRunThreadMain(L, task);
+    if (error.has_value())
+        task->feedback(*error);
+
+    return 1;
+}
+
+void open_tasklib(lua_State *L) {
+    lua_newtable(L);
+
+    lua_pushcfunction(L, fakeroblox_task_wait, "wait");
+    lua_setfield(L, -2, "wait");
+    lua_pushcfunction(L, fakeroblox_task_spawn, "spawn");
+    lua_setfield(L, -2, "spawn");
+    // lua_pushcfunction(L, fakeroblox_task_defer, "defer");
+    // lua_setfield(L, -2, "defer");
+    // lua_pushcfunction(L, fakeroblox_task_delay, "delay");
+    // lua_setfield(L, -2, "delay");
+    // lua_pushcfunction(L, fakeroblox_task_cancel, "cancel");
+    // lua_setfield(L, -2, "cancel");
+    // lua_pushcfunction(L, fakeroblox_task_status, "status");
+    // lua_setfield(L, -2, "status");
+
+    lua_setglobal(L, "task");
+}
+
+}; // namespace fakeroblox

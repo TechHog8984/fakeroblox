@@ -1,0 +1,16 @@
+-std=c++17
+
+-Iinclude
+
+-Idependencies/Luau/Analysis/include
+-Idependencies/Luau/Ast/include
+-Idependencies/Luau/Common/include
+-Idependencies/Luau/Compiler/include
+-Idependencies/Luau/Config/include
+-Idependencies/Luau/VM/src
+-Idependencies/Luau/VM/include
+
+-Idependencies/rlImGui
+-Idependencies/rlImGui/imgui-master
+
+-Idependencies/ImGuiColorTextEdit
