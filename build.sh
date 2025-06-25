@@ -87,6 +87,8 @@ if [ ! -d "$rlimguibuilddir" ]; then
     mkdir $rlimguibuilddir
     pushd dependencies/rlImGui
     echo "building rlImGui..."
+    sed -i -e 's/"IMGUI_DISABLE_OBSOLETE_FUNCTIONS",//g' premake5.lua
+    chmod +x ./premake5 || exit 1
     ./premake5 gmake || exit 1
     make config=release_x64 || exit 1
     ar rcs librlimgui.a ./build/obj/x64/Release/rlImGui/*.o || exit 1
