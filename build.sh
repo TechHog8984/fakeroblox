@@ -81,7 +81,7 @@ fi
 rlimguibuilddir=$builddir/rlImGui
 if [ ! -d "$rlimguibuilddir" ]; then
     if [[ "$PLATFORM" != "linux" ]]; then
-        echo "TODO: verify rlImGui builds on other platforms"
+        echo "TODO: verify rlImGui builds on other platforms; premake can take a compiler!"
         exit 1
     fi
     mkdir $rlimguibuilddir
@@ -116,7 +116,7 @@ mkdir $fakerobloxbuilddir
 
 echo "building fakeroblox..."
 pushd $fakerobloxbuilddir
-$compiler -std=c++17 -g -Wall $RELEASE_FLAGS $ASAN_FLAGS -c ../../../src/* ../../../src/*/* -I../../../include $LUAU_INCLUDE_BUILD -L../Luau -lluau || exit 1
+$compiler -std=c++17 -g -Wall $RELEASE_FLAGS $ASAN_FLAGS -c ../../../src/*.cpp ../../../src/*/*.cpp -I../../../include $LUAU_INCLUDE_BUILD -L../Luau -lluau || exit 1
 ar rcs libfakeroblox.a *.o || exit 1
 popd
 echo "fakeroblox built"
