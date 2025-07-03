@@ -1,6 +1,7 @@
 #include <cfloat>
 #include <cstdio>
 #include <cstring>
+#include <shared_mutex>
 
 #include "raylib.h"
 #include "rlImGui.h"
@@ -52,36 +53,38 @@ public:
         } type;
         std::string content;
     };
+    static std::shared_mutex mutex;
     static std::vector<Message> messages;
     static size_t message_count;
 
     static void clear() {
-        // TODO: synchronize
+        std::shared_lock lock(mutex);
         message_count = 0;
         messages.clear();
     }
 
     static void info(std::string content) {
-        // TODO: synchronize
+        std::shared_lock lock(mutex);
         message_count++;
         messages.push_back({ .type = Message::INFO, .content = content });
     }
     static void warning(std::string content) {
-        // TODO: synchronize
+        std::shared_lock lock(mutex);
         message_count++;
         messages.push_back({ .type = Message::WARNING, .content = content });
     }
     static void error(std::string content) {
-        // TODO: synchronize
+        std::shared_lock lock(mutex);
         message_count++;
         messages.push_back({ .type = Message::ERROR, .content = content });
     }
 };
 
+std::shared_mutex ScriptConsole::mutex;
 std::vector<ScriptConsole::Message> ScriptConsole::messages;
 size_t ScriptConsole::message_count = 0;
 
-static int fakeroblox_print(lua_State* thread) {
+int fakeroblox::fakeroblox_print(lua_State* thread) {
     std::string message;
     int n = lua_gettop(thread);
     for (int i = 0; i < n; i++) {
@@ -210,6 +213,7 @@ int main(int argc, char** argv) {
 
     rlImGuiShutdown();
     CloseWindow();
+    TaskScheduler::cleanup(L);
     lua_close(L);
 
     return 0;
