@@ -24,6 +24,13 @@ public:
     size_t unique_id;
 };
 
+#define PROP_INSTANCE_ARCHIVABLE "Archivable"
+#define PROP_INSTANCE_NAME "Name"
+#define PROP_INSTANCE_CLASS_NAME "ClassName"
+#define PROP_INSTANCE_PARENT "Parent"
+
+#define METHOD_INSTANCE_DESTROY "Destroy"
+
 rbxInstance* lua_checkinstance(lua_State* L, int arg);
 rbxInstance* lua_optinstance(lua_State* L, int arg);
 
@@ -32,7 +39,7 @@ void rbxInstanceCleanup(lua_State* L);
 
 namespace rbxInstance_datatype {
     int _new(lua_State* L);
-    // TODO: fromExisting
+    int from_existing(lua_State* L);
 }; // namespace rbxInstance_datatype
 
 namespace rbxInstance_methods {

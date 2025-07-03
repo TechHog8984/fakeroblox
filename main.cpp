@@ -273,7 +273,7 @@ int main(int argc, char** argv) {
                                 color = ImVec4{1,0,1,1};
                                 break;
                         }
-                        ImGui::TextColored(color, "%s", message.content.c_str());
+                        ImGui::TextColored(color, "%.*s", static_cast<int>(message.content.size()), message.content.c_str());
                     }
 
                     if (go_to_top)

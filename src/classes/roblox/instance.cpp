@@ -37,7 +37,7 @@ namespace rbxInstance_methods {
         instance->destroyed = true;
 
         lua_pushnil(L);
-        lua_setfield(L, -2, "Parent");
+        lua_setfield(L, -2, PROP_INSTANCE_PARENT);
 
         instance->parent_locked = true;
 
@@ -53,21 +53,21 @@ int rbxInstance__index(lua_State* L) {
     const char* key = luaL_checkstring(L, 2);
 
     // TODO: write-only properties, if they exist
-    if (strequal(key, "Archivable"))
+    if (strequal(key, PROP_INSTANCE_ARCHIVABLE))
         lua_pushboolean(L, instance->archivable);
-    else if (strequal(key, "Name"))
+    else if (strequal(key, PROP_INSTANCE_NAME))
         lua_pushlstring(L, instance->name.data(), instance->name.size());
-    else if (strequal(key, "ClassName"))
+    else if (strequal(key, PROP_INSTANCE_CLASS_NAME))
         lua_pushlstring(L, instance->class_name.data(), instance->class_name.size());
-    else if (strequal(key, "Parent")) {
+    else if (strequal(key, PROP_INSTANCE_PARENT)) {
         rbxInstance* parent = instance->parent;
         if (parent) {
             lua_pushnumber(L, parent->ref);
             lua_gettable(L, LUA_REGISTRYINDEX);
         } else
             lua_pushnil(L);
-    } else if (strequal(key, "Destroy"))
-        lua_pushcfunction(L, rbxInstance_methods::destroy, "destroy");
+    } else if (strequal(key, METHOD_INSTANCE_DESTROY))
+        lua_pushcfunction(L, rbxInstance_methods::destroy, METHOD_INSTANCE_DESTROY);
     else
         luaL_error(L, "'%s' is not a valid member of %s '%s'", key, instance->class_name.c_str(), instance->name.c_str());
 
@@ -90,12 +90,13 @@ int rbxInstance__newindex(lua_State* L) {
     luaL_checkany(L, 3);
 
     // TODO: read-only properties (like ClassName and functions)
-    if (strequal(key, "Archivable"))
+    if (strequal(key, PROP_INSTANCE_ARCHIVABLE))
         instance->archivable = luaL_checkboolean(L, 2);
-    else if (strequal(key, "Name"))
-        // FIXME: verify null termination is fine
-        instance->name = luaL_checkstring(L, 3);
-    else if (strequal(key, "Parent")) {
+    else if (strequal(key, PROP_INSTANCE_NAME)) {
+        size_t size;
+        auto str = luaL_checklstring(L, 3, &size);
+        instance->name = std::string(str, size);
+    } else if (strequal(key, PROP_INSTANCE_PARENT)) {
         // TODO: synchronize
         rbxInstance* old_parent = instance->parent;
         rbxInstance* parent = lua_optinstance(L, 3);
@@ -142,7 +143,7 @@ namespace rbxInstance_datatype {
 
         if (parent) {
             lua_pushvalue(L, 2);
-            lua_setfield(L, -2, "Parent");
+            lua_setfield(L, -2, PROP_INSTANCE_PARENT);
         }
 
         return 1;
