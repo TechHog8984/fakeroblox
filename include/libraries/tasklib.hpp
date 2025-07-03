@@ -54,9 +54,14 @@ public:
 class Task {
 public:
     lua_State* thread;
+    std::string identifier;
     int thread_ref;
     Feedback feedback;
     TaskTiming timing;
+
+    struct {
+        bool open = false;
+    } view;
 
     TaskStatus status = RUNNING;
     int arg_count = 0;    
@@ -66,6 +71,10 @@ public:
     Task(lua_State* thread, int thread_ref, Feedback feedback, TaskTiming timing)
         : thread(thread), thread_ref(thread_ref), feedback(feedback), timing(timing)
     {
+        char buffer[32];
+        std::snprintf(buffer, sizeof(buffer), "%p", static_cast<void*>(thread));
+        identifier = std::string(buffer);
+
         TaskScheduler::task_map.emplace(thread, this);
     }
 };

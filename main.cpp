@@ -3,6 +3,7 @@
 #include <cstring>
 #include <shared_mutex>
 
+#include "classes/roblox/instance.hpp"
 #include "raylib.h"
 #include "rlImGui.h"
 #include "imgui.h"
@@ -46,10 +47,11 @@ class ScriptConsole {
 public:
     class Message {
     public:
-        enum {
+        enum Type {
             INFO,
             WARNING,
-            ERROR
+            ERROR,
+            DEBUG
         } type;
         std::string content;
     };
@@ -63,20 +65,22 @@ public:
         messages.clear();
     }
 
-    static void info(std::string content) {
+    static void log(std::string message, Message::Type type) {
         std::shared_lock lock(mutex);
         message_count++;
-        messages.push_back({ .type = Message::INFO, .content = content });
+        messages.push_back({ .type = type, .content = message });
     }
-    static void warning(std::string content) {
-        std::shared_lock lock(mutex);
-        message_count++;
-        messages.push_back({ .type = Message::WARNING, .content = content });
+    static void info(std::string message) {
+        log(message, Message::INFO);
     }
-    static void error(std::string content) {
-        std::shared_lock lock(mutex);
-        message_count++;
-        messages.push_back({ .type = Message::ERROR, .content = content });
+    static void warning(std::string message) {
+        log(message, Message::WARNING);
+    }
+    static void error(std::string message) {
+        log(message, Message::ERROR);
+    }
+    static void debug(std::string message) {
+        log(message, Message::DEBUG);
     }
 };
 
@@ -84,19 +88,25 @@ std::shared_mutex ScriptConsole::mutex;
 std::vector<ScriptConsole::Message> ScriptConsole::messages;
 size_t ScriptConsole::message_count = 0;
 
-int fakeroblox::fakeroblox_print(lua_State* thread) {
+int fakeroblox_log(lua_State* L, ScriptConsole::Message::Type type) {
     std::string message;
-    int n = lua_gettop(thread);
+    int n = lua_gettop(L);
     for (int i = 0; i < n; i++) {
         size_t l;
-        const char* s = luaL_tolstring(thread, i + 1, &l);
+        const char* s = luaL_tolstring(L, i + 1, &l);
         if (i > 0)
             message += '\t';
         message.append(s, l);
-        lua_pop(thread, 1);
+        lua_pop(L, 1);
     }
-    ScriptConsole::info(message);
+    ScriptConsole::log(message, type);
     return 0;
+}
+int fakeroblox::fakeroblox_print(lua_State* L) {
+    return fakeroblox_log(L, ScriptConsole::Message::INFO);
+}
+int fakeroblox::fakeroblox_warn(lua_State* L) {
+    return fakeroblox_log(L, ScriptConsole::Message::WARNING);
 }
 
 size_t next_script_editor_tab_index = 0;
@@ -136,8 +146,12 @@ int main(int argc, char** argv) {
 
     lua_pushcfunction(L, fakeroblox_print, "print");
     lua_setglobal(L, "print");
+    lua_pushcfunction(L, fakeroblox_warn, "warn");
+    lua_setglobal(L, "warn");
 
     open_tasklib(L);
+
+    rbxInstanceSetup(L);
 
     luaL_sandbox(L);
 
@@ -148,6 +162,7 @@ int main(int argc, char** argv) {
 
     bool menu_editor_open = true;
     bool menu_console_open = true;
+    bool menu_thread_list_open = false;
 
     pushNewScriptEditorTab();
 
@@ -164,6 +179,7 @@ int main(int argc, char** argv) {
             if (ImGui::BeginMenu("Window")) {
                 ImGui::MenuItem("Script Editor", nullptr, &menu_editor_open);
                 ImGui::MenuItem("Script Console", nullptr, &menu_console_open);
+                ImGui::MenuItem("Thread List", nullptr, &menu_thread_list_open);
 
                 ImGui::EndMenu();
             }
@@ -222,29 +238,79 @@ int main(int argc, char** argv) {
                 if (ImGui::Button("Clear")) {
                     ScriptConsole::clear();
                 } else {
-                    ImGui::BeginChild("ScrollableRegion", ImGui::GetContentRegionAvail());
+                    static const char* goto_text = "go to";
+                    static const char* top_button_text = "top";
+                    static const char* bottom_button_text = "bottom";
+                    float text_width = ImGui::CalcTextSize(goto_text).x + ImGui::GetStyle().FramePadding.x * 2.f;
+                    float top_button_width = ImGui::CalcTextSize(top_button_text).x + ImGui::GetStyle().FramePadding.x * 2.f;
+                    float bottom_button_width = ImGui::CalcTextSize(bottom_button_text).x + ImGui::GetStyle().FramePadding.x * 2.f;
+
+                    ImGui::SameLine();
+                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - (text_width + ImGui::GetStyle().ItemSpacing.x + top_button_width + bottom_button_width));
+                    ImGui::Text("%s", goto_text);
+                    ImGui::SameLine();
+                    bool go_to_top = ImGui::Button(top_button_text);
+                    ImGui::SameLine();
+                    bool go_to_bottom = ImGui::Button(bottom_button_text);
+
+                    ImGui::BeginChild("ScrollableRegion", ImGui::GetContentRegionAvail(), 0,  ImGuiWindowFlags_HorizontalScrollbar);
+                    if (!go_to_bottom) go_to_bottom = ImGui::GetScrollY() >= ImGui::GetScrollMaxY();
 
                     for (size_t i = 0; i < ScriptConsole::message_count; i++) {
                         auto& message = ScriptConsole::messages[i];
+                        ImVec4 color;
                         switch (message.type) {
                             case ScriptConsole::Message::INFO:
-                                ImGui::TextColored(ImVec4{1,1,1,1}, "%s", message.content.c_str());
+                                color = ImVec4{1,1,1,1};
                                 break;
                             case ScriptConsole::Message::WARNING:
-                                ImGui::TextColored(ImVec4{1,1,0,1}, "%s", message.content.c_str());
+                                color = ImVec4{1,1,0,1};
                                 break;
                             case ScriptConsole::Message::ERROR:
-                                ImGui::TextColored(ImVec4{1,0,0,1}, "%s", message.content.c_str());
+                                color = ImVec4{1,0,0,1};
+                                break;
+                            case ScriptConsole::Message::DEBUG:
+                                color = ImVec4{1,0,1,1};
                                 break;
                         }
+                        ImGui::TextColored(color, "%s", message.content.c_str());
                     }
+
+                    if (go_to_top)
+                        ImGui::SetScrollY(0.f);
+                    else if (go_to_bottom)
+                        ImGui::SetScrollHereY(1.f);
 
                     ImGui::EndChild();
                 }
                 ImGui::End();
             }
         }
-        
+        if (menu_thread_list_open) {
+            if (ImGui::Begin("Thread List", &menu_thread_list_open)) {
+                std::vector<Task*> tasks_to_kill;
+                for (auto& pair : TaskScheduler::task_map) {
+                    Task* task = pair.second;
+                    std::string identifier = task->identifier;
+                    if (ImGui::Button(identifier.c_str()))
+                        task->view.open = true;
+                    if (task->view.open) {
+                        std::string win_id = std::string("Thread ");
+                        win_id.append(identifier);
+                        if (ImGui::Begin(win_id.c_str(), &task->view.open)) {
+                            ImGui::Text("status: %s", taskStatusTostring(task->status));
+                            if (ImGui::Button("Kill"))
+                                tasks_to_kill.push_back(task);
+                            ImGui::End();
+                        }
+                    }
+                }
+                for (size_t i = 0; i < tasks_to_kill.size(); i++)
+                    TaskScheduler::killTask(L, tasks_to_kill[i]);
+                ImGui::End();
+            }
+        }
+
         rlImGuiEnd();
 
         EndDrawing();
@@ -252,7 +318,9 @@ int main(int argc, char** argv) {
 
     rlImGuiShutdown();
     CloseWindow();
+
     TaskScheduler::cleanup(L);
+    rbxInstanceCleanup(L);
     lua_close(L);
 
     return 0;

@@ -116,7 +116,7 @@ mkdir $fakerobloxbuilddir
 
 echo "building fakeroblox..."
 pushd $fakerobloxbuilddir
-$compiler -std=c++17 -g -Wall $RELEASE_FLAGS $ASAN_FLAGS -c ../../../src/*.cpp ../../../src/*/*.cpp -I../../../include $LUAU_INCLUDE_BUILD -L../Luau -lluau || exit 1
+$compiler -std=c++17 -g -Wall $RELEASE_FLAGS $ASAN_FLAGS -c ../../../src/*.cpp ../../../src/*/*.cpp ../../../src/*/*/*.cpp -I../../../include $LUAU_INCLUDE_BUILD -L../Luau -lluau || exit 1
 ar rcs libfakeroblox.a *.o || exit 1
 popd
 echo "fakeroblox built"
