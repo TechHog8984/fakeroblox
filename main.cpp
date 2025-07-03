@@ -99,6 +99,21 @@ int fakeroblox::fakeroblox_print(lua_State* thread) {
     return 0;
 }
 
+size_t next_script_editor_tab_index = 0;
+struct ScriptEditorTab {
+    bool exists;
+    std::string name;
+    std::string code;
+};
+
+std::vector<ScriptEditorTab> script_editor_tab_list;
+void pushNewScriptEditorTab() {
+    next_script_editor_tab_index++;
+    std::string name = "script";
+    name.append(std::to_string(next_script_editor_tab_index));
+    script_editor_tab_list.push_back({true, name, "print'fakeroblox on top'"});
+}
+
 int main(int argc, char** argv) {
     if (argc < 1) {
         displayHelp();
@@ -134,6 +149,8 @@ int main(int argc, char** argv) {
     bool menu_editor_open = true;
     bool menu_console_open = true;
 
+    pushNewScriptEditorTab();
+
     while (!WindowShouldClose()) {
         TaskScheduler::run(L);
 
@@ -155,26 +172,48 @@ int main(int argc, char** argv) {
 
         if (menu_editor_open) {
             if (ImGui::Begin("Script Editor", &menu_editor_open)) {
-                static std::string script = "print(\"hello, roblox\")";
+                if (ImGui::Button("+##scripteditornewtab"))
+                    pushNewScriptEditorTab();
 
-                ImGui::InputTextMultiline(
-                    "##scriptbox",
-                    &script[0],
-                    script.capacity() + 1,
-                    ImVec2(-FLT_MIN, ImGui::GetContentRegionAvail().y - imgui_frame_height),
-                    ImGuiInputTextFlags_CallbackResize,
-                    inputTextCallback,
-                    (void*) &script
-                );
-                if (ImGui::Button("Execute")) {
-                    auto error = tryRunCode(L, script.c_str(), ScriptConsole::error);
-                    if (error.has_value())
-                        ScriptConsole::error(error.value());
-                }
                 ImGui::SameLine();
-                if (ImGui::Button("Clear"))
-                    script.clear();
-                
+
+                if (ImGui::BeginTabBar("scripteditortabs", ImGuiTabBarFlags_Reorderable )) {
+                    for (size_t i = 0; i < script_editor_tab_list.size(); i++) {
+                        auto& tab = script_editor_tab_list[i];
+
+                        if (ImGui::BeginTabItem(tab.name.c_str(), &tab.exists)) {
+                            ImGui::InputTextMultiline(
+                                "##scriptbox",
+                                &tab.code[0],
+                                tab.code.capacity() + 1,
+                                ImVec2(-FLT_MIN, ImGui::GetContentRegionAvail().y - imgui_frame_height),
+                                ImGuiInputTextFlags_CallbackResize,
+                                inputTextCallback,
+                                (void*) &tab.code
+                            );
+                            if (ImGui::Button("Execute")) {
+                                auto error = tryRunCode(L, tab.code.c_str(), ScriptConsole::error);
+                                if (error.has_value())
+                                    ScriptConsole::error(error.value());
+                            }
+                            ImGui::SameLine();
+                            if (ImGui::Button("Clear"))
+                                tab.code.clear();
+                            ImGui::EndTabItem();
+                        }
+                    }
+                    // remove tabs that were closed
+                    for (auto tab = script_editor_tab_list.begin(); tab != script_editor_tab_list.end();) {
+                        if (!tab->exists)
+                            tab = script_editor_tab_list.erase(tab);
+                        else
+                            ++tab;
+                    }
+                    if (script_editor_tab_list.empty())
+                        pushNewScriptEditorTab();
+                    ImGui::EndTabBar();
+                }
+
                 ImGui::End();
             }
         }
