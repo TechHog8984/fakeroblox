@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lua.h"
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -10,7 +11,6 @@ namespace fakeroblox {
 
 class rbxInstance {
 public:
-    int ref = 0;
     std::vector<rbxInstance*> children;
     bool destroyed = false;
 
@@ -22,6 +22,12 @@ public:
     // TODO: roblox_locked
     // TODO: sandboxed
     size_t unique_id;
+
+    // ~rbxInstance() {
+    //     std::string message = std::string("destroying ").append(name);
+    //     printf("%.*s\n", static_cast<int>(message.size()), message.c_str());
+    //     ScriptConsole::debug(message);
+    // }
 };
 
 #define PROP_INSTANCE_ARCHIVABLE "Archivable"
@@ -36,6 +42,9 @@ rbxInstance* lua_optinstance(lua_State* L, int arg);
 
 void rbxInstanceSetup(lua_State* L);
 void rbxInstanceCleanup(lua_State* L);
+
+std::shared_ptr<rbxInstance> newInstance(const char* class_name);
+int pushInstance(lua_State* L, std::shared_ptr<rbxInstance> instance);
 
 namespace rbxInstance_datatype {
     int _new(lua_State* L);

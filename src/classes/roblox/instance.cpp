@@ -6,11 +6,13 @@
 
 namespace fakeroblox {
 
+#define LUA_TAG_RBXINSTANCE 1
+
 rbxInstance* lua_checkinstance(lua_State* L, int arg) {
     luaL_checkany(L, arg);
     void* ud = luaL_checkudata(L, arg, "Instance");
 
-    return static_cast<rbxInstance*>(ud);
+    return *static_cast<rbxInstance**>(ud);
 }
 rbxInstance* lua_optinstance(lua_State* L, int arg) {
     if (lua_gettop(L) < arg)
@@ -22,7 +24,6 @@ rbxInstance* lua_optinstance(lua_State* L, int arg) {
     return lua_checkinstance(L, arg);
 }
 
-std::vector<rbxInstance*> all_instance_list;
 namespace rbxInstance_methods {
     int destroy(lua_State *L) {
         // FIXME: synchronize
@@ -30,19 +31,12 @@ namespace rbxInstance_methods {
         if (instance->destroyed)
             return 0;
 
-        auto position = std::find(all_instance_list.begin(), all_instance_list.end(), instance);
-        if (position == all_instance_list.end())
-            luaL_error(L, "failed to find instance in internal list");
-
         instance->destroyed = true;
 
         lua_pushnil(L);
         lua_setfield(L, -2, PROP_INSTANCE_PARENT);
 
         instance->parent_locked = true;
-
-        all_instance_list.erase(position);
-        lua_unref(L, instance->ref);
 
         return 0;
     }
@@ -62,8 +56,7 @@ int rbxInstance__index(lua_State* L) {
     else if (strequal(key, PROP_INSTANCE_PARENT)) {
         rbxInstance* parent = instance->parent;
         if (parent) {
-            lua_pushnumber(L, parent->ref);
-            lua_gettable(L, LUA_REGISTRYINDEX);
+            pushInstance(L, std::make_shared<rbxInstance>(*parent));
         } else
             lua_pushnil(L);
     } else if (strequal(key, METHOD_INSTANCE_DESTROY))
@@ -119,27 +112,52 @@ int rbxInstance__newindex(lua_State* L) {
     return 0;
 };
 
+void rbxInstance__dtor(lua_State* L, std::shared_ptr<rbxInstance> ptr) {
+    ptr.reset();
+}
 
+std::shared_ptr<rbxInstance> newInstance(const char* class_name) {
+    std::shared_ptr<rbxInstance> instance = std::make_shared<rbxInstance>();
+
+    // FIXME: default values
+    instance->archivable = false;
+    instance->name = class_name;
+    instance->class_name = class_name;
+    // FIXME: unique_id
+    instance->unique_id = 0;
+
+    return instance;
+}
+
+int pushInstance(lua_State* L, std::shared_ptr<rbxInstance> instance) {
+    lua_getfield(L, LUA_REGISTRYINDEX, "instancelookup");
+    lua_pushlightuserdata(L, instance.get());
+    lua_rawget(L, -2);
+
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        void* ud = lua_newuserdatatagged(L, sizeof(std::shared_ptr<rbxInstance>), LUA_TAG_RBXINSTANCE);
+        new(ud) std::shared_ptr<rbxInstance>(instance);
+
+        luaL_getmetatable(L, "Instance");
+        lua_setmetatable(L, -2);
+
+        lua_pushlightuserdata(L, instance.get());
+        lua_pushvalue(L, -2);
+        lua_rawset(L, -4);
+    }
+
+    lua_remove(L, -2);
+
+    return 1;
+}
 namespace rbxInstance_datatype {
     int _new(lua_State* L) {
         const char* class_name = luaL_checkstring(L, 1);
         rbxInstance* parent = lua_optinstance(L, 2);
 
-        void* ud = lua_newuserdata(L, sizeof(rbxInstance));
-        rbxInstance* instance = new (ud) rbxInstance;
-        all_instance_list.push_back(instance);
-
-        instance->ref = lua_ref(L, -1);
-
-        // FIXME: default values
-        instance->archivable = false;
-        instance->name = class_name;
-        instance->class_name = class_name;
-        // FIXME: unique_id
-        instance->unique_id = 0;
-
-        luaL_getmetatable(L, "Instance");
-        lua_setmetatable(L, -2);
+        std::shared_ptr<rbxInstance> instance = newInstance(class_name);
+        pushInstance(L, instance);
 
         if (parent) {
             lua_pushvalue(L, 2);
@@ -170,11 +188,25 @@ void rbxInstanceSetup(lua_State* L) {
     lua_setfield(L, -2, "new");
 
     lua_setglobal(L, "Instance");
+
+    // instancelookup
+    lua_newtable(L);
+    lua_pushvalue(L, -1);
+    lua_setmetatable(L, -2);
+    lua_pushstring(L, "v");
+    lua_setfield(L, -2, "__mode");
+
+    lua_setfield(L, LUA_REGISTRYINDEX, "instancelookup");
+
+    lua_setuserdatadtor(L, LUA_TAG_RBXINSTANCE, (lua_Destructor) rbxInstance__dtor);
+
+    auto instance = newInstance("DataModel");
+    instance->name.assign("FakeRoblox");
+
+    pushInstance(L, instance);
+    lua_setglobal(L, "game");
 }
 void rbxInstanceCleanup(lua_State* L) {
-    for (size_t i = 0; i < all_instance_list.size(); i++)
-        lua_unref(L, all_instance_list[i]->ref);
-    all_instance_list.clear();
 }
 
 }; // namespace fakeroblox

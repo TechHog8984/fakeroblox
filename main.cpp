@@ -1,7 +1,6 @@
 #include <cfloat>
 #include <cstdio>
 #include <cstring>
-#include <shared_mutex>
 
 #include "classes/roblox/instance.hpp"
 #include "raylib.h"
@@ -13,6 +12,7 @@
 
 #include "libraries/tasklib.hpp"
 #include "cli.hpp"
+#include "script_console.hpp"
 
 using namespace fakeroblox;
 
@@ -42,51 +42,6 @@ int inputTextCallback(ImGuiInputTextCallbackData* data) {
     }
     return 0;
 }
-
-class ScriptConsole {
-public:
-    class Message {
-    public:
-        enum Type {
-            INFO,
-            WARNING,
-            ERROR,
-            DEBUG
-        } type;
-        std::string content;
-    };
-    static std::shared_mutex mutex;
-    static std::vector<Message> messages;
-    static size_t message_count;
-
-    static void clear() {
-        std::shared_lock lock(mutex);
-        message_count = 0;
-        messages.clear();
-    }
-
-    static void log(std::string message, Message::Type type) {
-        std::shared_lock lock(mutex);
-        message_count++;
-        messages.push_back({ .type = type, .content = message });
-    }
-    static void info(std::string message) {
-        log(message, Message::INFO);
-    }
-    static void warning(std::string message) {
-        log(message, Message::WARNING);
-    }
-    static void error(std::string message) {
-        log(message, Message::ERROR);
-    }
-    static void debug(std::string message) {
-        log(message, Message::DEBUG);
-    }
-};
-
-std::shared_mutex ScriptConsole::mutex;
-std::vector<ScriptConsole::Message> ScriptConsole::messages;
-size_t ScriptConsole::message_count = 0;
 
 int fakeroblox_log(lua_State* L, ScriptConsole::Message::Type type) {
     std::string message;
