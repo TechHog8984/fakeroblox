@@ -36,7 +36,7 @@ int handleRecordOption(const char* option, const char*& arg, bool can_be_empty =
     return 0;
 }
 
-int inputTextCallback(ImGuiInputTextCallbackData* data) {
+int imgui_inputTextCallback(ImGuiInputTextCallbackData* data) {
     if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
         std::string* str = (std::string*) data->UserData;
         str->resize(data->BufTextLen);
@@ -105,9 +105,9 @@ int main(int argc, char** argv) {
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
 
-    lua_pushcfunction(L, fakeroblox_print, "print");
+    lua_pushcfunction(L, fakeroblox::fakeroblox_print, "print");
     lua_setglobal(L, "print");
-    lua_pushcfunction(L, fakeroblox_warn, "warn");
+    lua_pushcfunction(L, fakeroblox::fakeroblox_warn, "warn");
     lua_setglobal(L, "warn");
     lua_pushcfunction(L, fakeroblox_getreg, "getreg");
     lua_setglobal(L, "getreg");
@@ -170,7 +170,7 @@ int main(int argc, char** argv) {
                                 tab.code.capacity() + 1,
                                 ImVec2(-FLT_MIN, ImGui::GetContentRegionAvail().y - imgui_frame_height),
                                 ImGuiInputTextFlags_CallbackResize,
-                                inputTextCallback,
+                                imgui_inputTextCallback,
                                 (void*) &tab.code
                             );
                             if (ImGui::Button("Execute")) {

@@ -6,6 +6,9 @@
 
 #include "lua.h"
 
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
 namespace fakeroblox {
 
 #define strequal(str1, str2) (strcmp(str1, str2) == 0)
