@@ -193,7 +193,7 @@ void rbxInstanceSetup(lua_State* L) {
     lua_newtable(L);
     lua_pushvalue(L, -1);
     lua_setmetatable(L, -2);
-    lua_pushstring(L, "v");
+    lua_pushstring(L, "kvs");
     lua_setfield(L, -2, "__mode");
 
     lua_setfield(L, LUA_REGISTRYINDEX, "instancelookup");

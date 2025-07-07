@@ -59,10 +59,10 @@ int fakeroblox_log(lua_State* L, ScriptConsole::Message::Type type) {
     ScriptConsole::log(message, type);
     return 0;
 }
-int fakeroblox_print(lua_State* L) {
+int fakeroblox::fakeroblox_print(lua_State* L) {
     return fakeroblox_log(L, ScriptConsole::Message::INFO);
 }
-int fakeroblox_warn(lua_State* L) {
+int fakeroblox::fakeroblox_warn(lua_State* L) {
     return fakeroblox_log(L, ScriptConsole::Message::WARNING);
 }
 int fakeroblox_getreg(lua_State* L) {
