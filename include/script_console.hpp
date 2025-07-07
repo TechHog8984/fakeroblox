@@ -22,6 +22,11 @@ public:
     static std::vector<Message> messages;
     static size_t message_count;
 
+    static bool show_info;
+    static bool show_warning;
+    static bool show_error;
+    static bool show_debug;
+
     static void clear();
 
     static void log(std::string message, Message::Type type);

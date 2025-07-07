@@ -6,6 +6,11 @@ std::shared_mutex ScriptConsole::mutex;
 std::vector<ScriptConsole::Message> ScriptConsole::messages;
 size_t ScriptConsole::message_count = 0;
 
+bool ScriptConsole::show_info = true;
+bool ScriptConsole::show_warning = true;
+bool ScriptConsole::show_error = true;
+bool ScriptConsole::show_debug = false;
+
 void ScriptConsole::clear() {
     std::shared_lock lock(mutex);
     message_count = 0;

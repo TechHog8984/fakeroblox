@@ -3,6 +3,8 @@
 #include <cstring>
 
 #include "classes/roblox/instance.hpp"
+#include "libraries/instructionlib.hpp"
+#include "libraries/signallib.hpp"
 #include "raylib.h"
 #include "rlImGui.h"
 #include "imgui.h"
@@ -57,11 +59,15 @@ int fakeroblox_log(lua_State* L, ScriptConsole::Message::Type type) {
     ScriptConsole::log(message, type);
     return 0;
 }
-int fakeroblox::fakeroblox_print(lua_State* L) {
+int fakeroblox_print(lua_State* L) {
     return fakeroblox_log(L, ScriptConsole::Message::INFO);
 }
-int fakeroblox::fakeroblox_warn(lua_State* L) {
+int fakeroblox_warn(lua_State* L) {
     return fakeroblox_log(L, ScriptConsole::Message::WARNING);
+}
+int fakeroblox_getreg(lua_State* L) {
+    lua_pushvalue(L, LUA_REGISTRYINDEX);
+    return 1;
 }
 
 size_t next_script_editor_tab_index = 0;
@@ -103,8 +109,12 @@ int main(int argc, char** argv) {
     lua_setglobal(L, "print");
     lua_pushcfunction(L, fakeroblox_warn, "warn");
     lua_setglobal(L, "warn");
+    lua_pushcfunction(L, fakeroblox_getreg, "getreg");
+    lua_setglobal(L, "getreg");
 
     open_tasklib(L);
+    open_instructionlib(L);
+    setup_signallib(L);
 
     rbxInstanceSetup(L);
 
@@ -164,7 +174,7 @@ int main(int argc, char** argv) {
                                 (void*) &tab.code
                             );
                             if (ImGui::Button("Execute")) {
-                                auto error = tryRunCode(L, tab.code.c_str(), ScriptConsole::error);
+                                auto error = tryRunCode(L, tab.name.c_str(), tab.code.c_str(), ScriptConsole::error);
                                 if (error.has_value())
                                     ScriptConsole::error(error.value());
                             }
@@ -209,26 +219,42 @@ int main(int argc, char** argv) {
                     ImGui::SameLine();
                     bool go_to_bottom = ImGui::Button(bottom_button_text);
 
+                    ImGui::Checkbox("INFO", &ScriptConsole::show_info);
+                    ImGui::SameLine();
+                    ImGui::Checkbox("WARNING", &ScriptConsole::show_warning);
+                    ImGui::SameLine();
+                    ImGui::Checkbox("ERROR", &ScriptConsole::show_error);
+                    ImGui::SameLine();
+                    ImGui::Checkbox("DEBUG", &ScriptConsole::show_debug);
+
+                    ImGui::Separator();
+
                     ImGui::BeginChild("ScrollableRegion", ImGui::GetContentRegionAvail(), 0,  ImGuiWindowFlags_HorizontalScrollbar);
                     if (!go_to_bottom) go_to_bottom = ImGui::GetScrollY() >= ImGui::GetScrollMaxY();
 
                     for (size_t i = 0; i < ScriptConsole::message_count; i++) {
+                        bool skip = false;
                         auto& message = ScriptConsole::messages[i];
                         ImVec4 color;
                         switch (message.type) {
                             case ScriptConsole::Message::INFO:
+                                skip = !ScriptConsole::show_info;
                                 color = ImVec4{1,1,1,1};
                                 break;
                             case ScriptConsole::Message::WARNING:
+                                skip = !ScriptConsole::show_warning;
                                 color = ImVec4{1,1,0,1};
                                 break;
                             case ScriptConsole::Message::ERROR:
+                                skip = !ScriptConsole::show_error;
                                 color = ImVec4{1,0,0,1};
                                 break;
                             case ScriptConsole::Message::DEBUG:
+                                skip = !ScriptConsole::show_debug;
                                 color = ImVec4{1,0,1,1};
                                 break;
                         }
+                        if (skip) continue;
                         ImGui::TextColored(color, "%.*s", static_cast<int>(message.content.size()), message.content.c_str());
                     }
 

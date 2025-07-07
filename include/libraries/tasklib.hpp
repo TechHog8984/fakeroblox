@@ -81,6 +81,6 @@ public:
 
 void open_tasklib(lua_State* L);
 
-std::optional<std::string> tryRunCode(lua_State* L, const char* source, Feedback feedback);
+std::optional<std::string> tryRunCode(lua_State* L, const char* chunk_name, const char* source, Feedback feedback);
 
 }; // namespace fakeroblox

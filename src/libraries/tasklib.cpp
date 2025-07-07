@@ -1,4 +1,5 @@
 #include "libraries/tasklib.hpp"
+#include "Luau/Common.h"
 #include "common.hpp"
 #include "lua.h"
 #include "lualib.h"
@@ -198,7 +199,7 @@ std::optional<std::string> tryRunThreadMain(lua_State* L, Task* task) {
     return std::string("failed to start thread: ").append(std::get<std::string>(result));
 }
 
-std::optional<std::string> tryRunCode(lua_State* L, const char* source, Feedback feedback) {
+std::optional<std::string> tryRunCode(lua_State* L, const char* chunk_name, const char* source, Feedback feedback) {
     size_t bytecode_size = 0;
     char* bytecode = luau_compile(source, std::strlen(source), NULL, &bytecode_size);
     if (!bytecode)
@@ -209,7 +210,7 @@ std::optional<std::string> tryRunCode(lua_State* L, const char* source, Feedback
     lua_State* thread = thread_pair.first;
     Task* task = thread_pair.second;
 
-    int r = luau_load(thread, "", bytecode, bytecode_size, 0);
+    int r = luau_load(thread, chunk_name, bytecode, bytecode_size, 0);
     free(bytecode);
     if (r) {
         std::string msg = std::string("failed to load chunk: ")
@@ -274,7 +275,7 @@ std::optional<PreSpawnResult> preTaskSpawn(lua_State* L, const char* func_name, 
             break;
         }
         default:
-            __builtin_unreachable();
+            LUAU_UNREACHABLE();
     }
 
     for (int i = 0; i < arg_count; i++) {
