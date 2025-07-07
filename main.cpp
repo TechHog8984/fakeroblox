@@ -110,6 +110,7 @@ int main(int argc, char** argv) {
 
     luaL_sandbox(L);
 
+    SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(800, 600, "fakeroblox");
     SetExitKey(KEY_NULL);
