@@ -1,6 +1,7 @@
 #include <cfloat>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 
 #include "classes/roblox/instance.hpp"
 #include "libraries/instructionlib.hpp"
@@ -73,6 +74,7 @@ int fakeroblox_getreg(lua_State* L) {
 size_t next_script_editor_tab_index = 0;
 struct ScriptEditorTab {
     bool exists;
+    bool newly_created;
     std::string name;
     std::string code;
 };
@@ -82,7 +84,7 @@ void pushNewScriptEditorTab() {
     next_script_editor_tab_index++;
     std::string name = "script";
     name.append(std::to_string(next_script_editor_tab_index));
-    script_editor_tab_list.push_back({true, name, "print'fakeroblox on top'"});
+    script_editor_tab_list.push_back({true, true, name, "print'fakeroblox on top'"});
 }
 
 int main(int argc, char** argv) {
@@ -102,6 +104,21 @@ int main(int argc, char** argv) {
         }
     }
 
+    std::ifstream api_dump_file("Full-API-Dump.json");
+    if (!api_dump_file) {
+        fprintf(stderr, "ERROR: failed to open Full-API-Dump.json\n");
+        return 1;
+    }
+
+    std::string api_dump;
+    std::string buffer;
+    while (std::getline(api_dump_file, buffer))
+        api_dump.append(buffer) += '\n';
+    assert(api_dump.size() > 0);
+    api_dump.erase(api_dump.size() - 1);
+
+    api_dump_file.close();
+
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
 
@@ -116,7 +133,7 @@ int main(int argc, char** argv) {
     open_instructionlib(L);
     setup_signallib(L);
 
-    rbxInstanceSetup(L);
+    rbxInstanceSetup(L, api_dump);
 
     luaL_sandbox(L);
 
@@ -163,7 +180,12 @@ int main(int argc, char** argv) {
                     for (size_t i = 0; i < script_editor_tab_list.size(); i++) {
                         auto& tab = script_editor_tab_list[i];
 
-                        if (ImGui::BeginTabItem(tab.name.c_str(), &tab.exists)) {
+                        ImGuiTabItemFlags flags = 0;
+                        if (tab.newly_created) {
+                            flags |= ImGuiTabItemFlags_SetSelected;
+                            tab.newly_created = false;
+                        }
+                        if (ImGui::BeginTabItem(tab.name.c_str(), &tab.exists, flags)) {
                             ImGui::InputTextMultiline(
                                 "##scriptbox",
                                 &tab.code[0],
@@ -255,7 +277,18 @@ int main(int argc, char** argv) {
                                 break;
                         }
                         if (skip) continue;
-                        ImGui::TextColored(color, "%.*s", static_cast<int>(message.content.size()), message.content.c_str());
+                        std::string content = message.content;
+                        size_t size = content.size();
+                        if (size == 0) {
+                            const float dec = 0.14;
+                            if (color.x >= dec) color.x -= dec;
+                            if (color.y >= dec) color.y -= dec;
+                            if (color.z >= dec) color.z -= dec;
+                            if (color.w >= dec) color.w -= dec;
+                            content.assign("[empty]");
+                            size = content.size();
+                        }
+                        ImGui::TextColored(color, "%.*s", static_cast<int>(size), content.c_str());
                     }
 
                     if (go_to_top)

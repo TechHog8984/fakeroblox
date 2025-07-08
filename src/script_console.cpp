@@ -1,4 +1,5 @@
 #include "script_console.hpp"
+#include <cstdarg>
 
 using namespace fakeroblox;
 
@@ -22,6 +23,7 @@ void ScriptConsole::log(std::string message, Message::Type type) {
     message_count++;
     messages.push_back({ .type = type, .content = message });
 }
+
 void ScriptConsole::info(std::string message) {
     log(message, Message::INFO);
 }
@@ -34,3 +36,33 @@ void ScriptConsole::error(std::string message) {
 void ScriptConsole::debug(std::string message) {
     log(message, Message::DEBUG);
 }
+
+std::string format(const char* fmt, va_list args) {
+    va_list args_copy;
+    va_copy(args_copy, args);
+
+    int size = std::vsnprintf(nullptr, 0, fmt, args_copy);
+    va_end(args_copy);
+
+    std::vector<char> buffer(size + 1);
+    std::vsnprintf(buffer.data(), buffer.size(), fmt, args);
+    return std::string(buffer.data(), size);
+}
+
+#define internal_logf(type) { \
+    va_list args; \
+    va_start(args, fmt); \
+    std::string result = format(fmt, args); \
+    va_end(args); \
+\
+    log(result, type); \
+}
+
+void ScriptConsole::logf(Message::Type type, const char* fmt, ...) internal_logf(type)
+
+void ScriptConsole::infof(const char* fmt, ...) internal_logf(Message::INFO)
+void ScriptConsole::warningf(const char* fmt, ...) internal_logf(Message::WARNING)
+void ScriptConsole::errorf(const char* fmt, ...) internal_logf(Message::ERROR)
+void ScriptConsole::debugf(const char* fmt, ...) internal_logf(Message::DEBUG)
+
+#undef internal_logf

@@ -30,10 +30,17 @@ public:
     static void clear();
 
     static void log(std::string message, Message::Type type);
+
     static void info(std::string message);
     static void warning(std::string message);
     static void error(std::string message);
     static void debug(std::string message);
+
+    static void logf(Message::Type type, const char* fmt, ...);
+    static void debugf(const char* fmt, ...);
+    static void infof(const char* fmt, ...);
+    static void warningf(const char* fmt, ...);
+    static void errorf(const char* fmt, ...);
 };
 
 }; // namespace fakeroblox
