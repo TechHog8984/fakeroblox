@@ -6,7 +6,7 @@ In its current state, building fakeroblox is a pain sorry. `./build.sh --release
 
 # GOALS
 * Instance system
-* 1:1 Roblox error message
+* 1:1 Roblox error messages
 * 2d graphics
 
 # NONGOALS
