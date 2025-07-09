@@ -84,12 +84,36 @@ namespace rbxInstance_methods {
     }
 }; // namespace rbxInstance_methods
 
+int rbxInstance__tostring(lua_State* L) {
+    std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
+    auto name = instance->getValue<std::string>(PROP_INSTANCE_NAME);
+    lua_pushlstring(L, name.c_str(), name.size());
+    return 1;
+}
+
+int pushMethod(lua_State* L, std::shared_ptr<rbxInstance>& instance, std::string method_name) {
+    std::string original = method_name;
+    rbxMethod& method = instance->methods[method_name];
+    if (method.route)
+        method_name = *method.route;
+
+    if (method.func)
+        lua_pushcfunction(L, method.func, original.c_str());
+    else
+        luaL_error(L, "INTERNAL ERROR: TODO implement '%s'", original.c_str());
+
+    return 1;
+}
+
 int rbxInstance__index(lua_State* L) {
     std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     auto class_name = instance->getValue<std::string>(PROP_INSTANCE_CLASS_NAME);
     if (instance->values.find(key) == instance->values.end()) {
+        if (instance->methods.find(key) != instance->methods.end())
+            return pushMethod(L, instance, key);
+
         auto child = instance->findFirstChild(key);
         if (child) {
             lua_pushinstance(L, child);
@@ -140,12 +164,6 @@ int rbxInstance__index(lua_State* L) {
     return 1;
 };
 
-int rbxInstance__tostring(lua_State* L) {
-    std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
-    auto name = instance->getValue<std::string>(PROP_INSTANCE_NAME);
-    lua_pushlstring(L, name.c_str(), name.size());
-    return 1;
-}
 const char* getOptionalInstanceName(std::shared_ptr<rbxInstance> instance) {
     if (!instance || !instance.get())
         return "NULL";
@@ -239,8 +257,6 @@ int rbxInstance__namecall(lua_State* L) {
         luaL_error(L, "no namecall method!");
     std::string method_name = namecall;
 
-    // FIXME: methods should have a func ptr that gets set in newInstance
-
     if (instance->methods.find(method_name) == instance->methods.end()) {
         auto name = instance->getValue<std::string>(PROP_INSTANCE_NAME);
         auto class_name = instance->getValue<std::string>(PROP_INSTANCE_CLASS_NAME);
@@ -249,17 +265,7 @@ int rbxInstance__namecall(lua_State* L) {
 
     int top = lua_gettop(L);
 
-    rbxMethod& method = instance->methods[method_name];
-    if (method.route)
-        method_name = *method.route;
-
-    if (method_name == "Destroy")
-        lua_pushcfunction(L, rbxInstance_methods::destroy, namecall);
-    else if (method_name == "FindFirstChild")
-        lua_pushcfunction(L, rbxInstance_methods::findFirstChild, namecall);
-    else
-        luaL_error(L, "INTERNAL ERROR: TODO implement '%s'", namecall);
-
+    pushMethod(L, instance, method_name);
     for (int i = 0; i < top; i++) {
         lua_pushvalue(L, 1);
         lua_remove(L, 1);
@@ -443,6 +449,9 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
         class_map[pair.first]->superclass = class_map[pair.second];
 
     superclass_map.clear();
+
+    class_map["Instance"]->methods["Destroy"].func = rbxInstance_methods::destroy;
+    class_map["Instance"]->methods["FindFirstChild"].func = rbxInstance_methods::findFirstChild;
 
     // metatable
     luaL_newmetatable(L, "Instance");

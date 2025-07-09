@@ -35,6 +35,7 @@ enum Type_DataType {
 struct rbxMethod {
     std::string name;
     std::optional<std::string> route = std::nullopt;
+    lua_CFunction func = nullptr;
 };
 
 class rbxClass {
@@ -117,45 +118,5 @@ namespace rbxInstance_datatype {
     int _new(lua_State* L);
     int from_existing(lua_State* L);
 }; // namespace rbxInstance_datatype
-
-namespace rbxInstance_methods {
-    // TODO: addTag
-
-    int clearAllChildren(lua_State* L);
-    // TODO: clone
-    int destroy(lua_State* L);
-
-    // TODO: findFirstAncestor*
-    // TODO: findFirstChild*
-    // TODO: findFirstDescendant
-
-    // TODO: getActor
-
-    // TODO: getAttribute*
-
-    int getChildren(lua_State* L);
-
-    // TODO: getDebugId
-
-    // TODO: getDescendants
-
-    // TODO: getFullName
-
-    // TODO: getStyled*
-
-    // TODO: getTags & hasTag
-
-    // TODO: is[Ancestor/Descendant]Of
-
-    // TODO: isPropertyModified
-
-    // TODO: removeTag
-
-    // TODO: resetPropertyToDefault
-
-    // TODO: setAttribute
-
-    // TODO: waitForChild
-}; // namespace rbxInstance_methods
 
 }; // namespace fakeroblox
