@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "console.hpp"
 #include "lua.h"
 
 #include "common.hpp"
@@ -54,10 +55,12 @@ public:
 class Task {
 public:
     lua_State* thread;
+    Console* console = &Console::ScriptConsole;
     std::string identifier;
     int thread_ref;
     Feedback feedback;
     TaskTiming timing;
+    OnKill on_kill;
 
     struct {
         bool open = false;
@@ -68,19 +71,13 @@ public:
     bool canceled = false;
     bool finished = false;
 
-    Task(lua_State* thread, int thread_ref, Feedback feedback, TaskTiming timing)
-        : thread(thread), thread_ref(thread_ref), feedback(feedback), timing(timing)
-    {
-        char buffer[32];
-        std::snprintf(buffer, sizeof(buffer), "%p", static_cast<void*>(thread));
-        identifier = std::string(buffer);
-
-        TaskScheduler::task_map.emplace(thread, this);
-    }
+    Task(lua_State* thread, int thread_ref, Feedback feedback, TaskTiming timing, OnKill on_kill = nullptr);
+    ~Task();
 };
 
 void open_tasklib(lua_State* L);
 
-std::optional<std::string> tryRunCode(lua_State* L, const char* chunk_name, const char* source, Feedback feedback);
+std::optional<std::string> tryCreateThreadAndSpawnFunction(lua_State* L, Feedback feedback, Console* console = nullptr);
+std::optional<std::string> tryRunCode(lua_State* L, const char* chunk_name, const char* source, Feedback feedback, OnKill on_kill = nullptr, Console* console = nullptr);
 
 }; // namespace fakeroblox

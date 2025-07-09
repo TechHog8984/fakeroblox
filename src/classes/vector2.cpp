@@ -49,7 +49,8 @@ int Vector2__index(lua_State* L) {
     luaL_error(L, "%s is not a valid member of Vector2", key);
 }
 int Vector2__newindex(lua_State* L) {
-    Vector2* v2 = static_cast<Vector2*>(luaL_checkudata(L, 1, "Vector2"));
+    // Vector2* v2 = static_cast<Vector2*>(luaL_checkudata(L, 1, "Vector2"));
+    luaL_checkudata(L, 1, "Vector2");
     const char* key = luaL_checkstring(L, 2);
 
     if (strlen(key) == 1) {
@@ -70,7 +71,8 @@ int Vector2__newindex(lua_State* L) {
     return 0;
 }
 int Vector2__namecall(lua_State* L) {
-    Vector2* v2 = static_cast<Vector2*>(luaL_checkudata(L, 1, "Vector2"));
+    // Vector2* v2 = static_cast<Vector2*>(luaL_checkudata(L, 1, "Vector2"));
+    luaL_checkudata(L, 1, "Vector2");
     const char* namecall = lua_namecallatom(L, nullptr);
     if (!namecall)
         luaL_error(L, "no namecall method!");

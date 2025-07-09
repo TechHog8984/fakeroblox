@@ -2,21 +2,25 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <thread>
 
-#include "classes/roblox/instance.hpp"
-#include "classes/vector2.hpp"
-#include "libraries/instructionlib.hpp"
-#include "libraries/signallib.hpp"
+#include "environment.hpp"
 #include "raylib.h"
 #include "rlImGui.h"
 #include "imgui.h"
 
+#include "cli.hpp"
+#include "console.hpp"
+#include "tests.hpp"
+
+#include "classes/roblox/instance.hpp"
+#include "classes/vector2.hpp"
+#include "libraries/tasklib.hpp"
+#include "libraries/instructionlib.hpp"
+#include "libraries/signallib.hpp"
+
 #include "lua.h"
 #include "lualib.h"
-
-#include "libraries/tasklib.hpp"
-#include "cli.hpp"
-#include "script_console.hpp"
 
 using namespace fakeroblox;
 
@@ -47,7 +51,7 @@ int imgui_inputTextCallback(ImGuiInputTextCallbackData* data) {
     return 0;
 }
 
-int fakeroblox_log(lua_State* L, ScriptConsole::Message::Type type) {
+int fakeroblox_log(lua_State* L, Console::Message::Type type) {
     std::string message;
     int n = lua_gettop(L);
     for (int i = 0; i < n; i++) {
@@ -58,18 +62,14 @@ int fakeroblox_log(lua_State* L, ScriptConsole::Message::Type type) {
         message.append(s, l);
         lua_pop(L, 1);
     }
-    ScriptConsole::log(message, type);
+    TaskScheduler::getTaskFromThread(L)->console->log(message, type);
     return 0;
 }
 int fakeroblox::fakeroblox_print(lua_State* L) {
-    return fakeroblox_log(L, ScriptConsole::Message::INFO);
+    return fakeroblox_log(L, Console::Message::INFO);
 }
 int fakeroblox::fakeroblox_warn(lua_State* L) {
-    return fakeroblox_log(L, ScriptConsole::Message::WARNING);
-}
-int fakeroblox_getreg(lua_State* L) {
-    lua_pushvalue(L, LUA_REGISTRYINDEX);
-    return 1;
+    return fakeroblox_log(L, Console::Message::WARNING);
 }
 
 size_t next_script_editor_tab_index = 0;
@@ -127,8 +127,8 @@ int main(int argc, char** argv) {
     lua_setglobal(L, "print");
     lua_pushcfunction(L, fakeroblox::fakeroblox_warn, "warn");
     lua_setglobal(L, "warn");
-    lua_pushcfunction(L, fakeroblox_getreg, "getreg");
-    lua_setglobal(L, "getreg");
+
+    open_fakeroblox_environment(L);
 
     open_tasklib(L);
     open_instructionlib(L);
@@ -147,7 +147,11 @@ int main(int argc, char** argv) {
 
     bool menu_editor_open = true;
     bool menu_console_open = true;
+    bool menu_tests_open = false;
     bool menu_thread_list_open = false;
+
+    bool is_running_tests = false;
+    bool should_run_tests = false;
 
     pushNewScriptEditorTab();
 
@@ -164,6 +168,7 @@ int main(int argc, char** argv) {
             if (ImGui::BeginMenu("Window")) {
                 ImGui::MenuItem("Script Editor", nullptr, &menu_editor_open);
                 ImGui::MenuItem("Script Console", nullptr, &menu_console_open);
+                ImGui::MenuItem("Tests", nullptr, &menu_tests_open);
                 ImGui::MenuItem("Thread List", nullptr, &menu_thread_list_open);
 
                 ImGui::EndMenu();
@@ -198,9 +203,11 @@ int main(int argc, char** argv) {
                                 (void*) &tab.code
                             );
                             if (ImGui::Button("Execute")) {
-                                auto error = tryRunCode(L, tab.name.c_str(), tab.code.c_str(), ScriptConsole::error);
+                                auto error = tryRunCode(L, tab.name.c_str(), tab.code.c_str(), [] (std::string error){
+                                    Console::ScriptConsole.error(error);
+                                });
                                 if (error.has_value())
-                                    ScriptConsole::error(error.value());
+                                    Console::ScriptConsole.error(error.value());
                             }
                             ImGui::SameLine();
                             if (ImGui::Button("Clear"))
@@ -226,7 +233,7 @@ int main(int argc, char** argv) {
         if (menu_console_open) {
             if (ImGui::Begin("Script Console", &menu_console_open)) {
                 if (ImGui::Button("Clear")) {
-                    ScriptConsole::clear();
+                    Console::ScriptConsole.clear();
                 } else {
                     static const char* goto_text = "go to";
                     static const char* top_button_text = "top";
@@ -243,55 +250,20 @@ int main(int argc, char** argv) {
                     ImGui::SameLine();
                     bool go_to_bottom = ImGui::Button(bottom_button_text);
 
-                    ImGui::Checkbox("INFO", &ScriptConsole::show_info);
+                    ImGui::Checkbox("INFO", &Console::ScriptConsole.show_info);
                     ImGui::SameLine();
-                    ImGui::Checkbox("WARNING", &ScriptConsole::show_warning);
+                    ImGui::Checkbox("WARNING", &Console::ScriptConsole.show_warning);
                     ImGui::SameLine();
-                    ImGui::Checkbox("ERROR", &ScriptConsole::show_error);
+                    ImGui::Checkbox("ERROR", &Console::ScriptConsole.show_error);
                     ImGui::SameLine();
-                    ImGui::Checkbox("DEBUG", &ScriptConsole::show_debug);
+                    ImGui::Checkbox("DEBUG", &Console::ScriptConsole.show_debug);
 
                     ImGui::Separator();
 
                     ImGui::BeginChild("ScrollableRegion", ImGui::GetContentRegionAvail(), 0,  ImGuiWindowFlags_HorizontalScrollbar);
                     if (!go_to_bottom) go_to_bottom = ImGui::GetScrollY() >= ImGui::GetScrollMaxY();
 
-                    for (size_t i = 0; i < ScriptConsole::message_count; i++) {
-                        bool skip = false;
-                        auto& message = ScriptConsole::messages[i];
-                        ImVec4 color;
-                        switch (message.type) {
-                            case ScriptConsole::Message::INFO:
-                                skip = !ScriptConsole::show_info;
-                                color = ImVec4{1,1,1,1};
-                                break;
-                            case ScriptConsole::Message::WARNING:
-                                skip = !ScriptConsole::show_warning;
-                                color = ImVec4{1,1,0,1};
-                                break;
-                            case ScriptConsole::Message::ERROR:
-                                skip = !ScriptConsole::show_error;
-                                color = ImVec4{1,0,0,1};
-                                break;
-                            case ScriptConsole::Message::DEBUG:
-                                skip = !ScriptConsole::show_debug;
-                                color = ImVec4{1,0,1,1};
-                                break;
-                        }
-                        if (skip) continue;
-                        std::string content = message.content;
-                        size_t size = content.size();
-                        if (size == 0) {
-                            const float dec = 0.14;
-                            if (color.x >= dec) color.x -= dec;
-                            if (color.y >= dec) color.y -= dec;
-                            if (color.z >= dec) color.z -= dec;
-                            if (color.w >= dec) color.w -= dec;
-                            content.assign("[empty]");
-                            size = content.size();
-                        }
-                        ImGui::TextColored(color, "%.*s", static_cast<int>(size), content.c_str());
-                    }
+                    Console::ScriptConsole.renderMessages();
 
                     if (go_to_top)
                         ImGui::SetScrollY(0.f);
@@ -300,6 +272,23 @@ int main(int argc, char** argv) {
 
                     ImGui::EndChild();
                 }
+                ImGui::End();
+            }
+        }
+        if (menu_tests_open) {
+            if (ImGui::Begin("Tests", &menu_tests_open)) {
+                if (is_running_tests)
+                    ImGui::Text("Running tests...");
+                else if (ImGui::Button("Run all tests")) {
+                    is_running_tests = true;
+                    should_run_tests = true;
+                    Console::TestsConsole.clear();
+                }
+
+                ImGui::BeginChild("ScrollableRegion", ImGui::GetContentRegionAvail(), 0,  ImGuiWindowFlags_HorizontalScrollbar);
+                Console::TestsConsole.renderMessages();
+                ImGui::EndChild();
+
                 ImGui::End();
             }
         }
@@ -331,6 +320,13 @@ int main(int argc, char** argv) {
         rlImGuiEnd();
 
         EndDrawing();
+
+        if (should_run_tests) {
+            should_run_tests = false;
+            std::thread([&L, &is_running_tests]{
+                runAllTests(L, is_running_tests);
+            }).detach();
+        }
     }
 
     rlImGuiShutdown();

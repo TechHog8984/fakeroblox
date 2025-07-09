@@ -2,7 +2,6 @@
 #include "common.hpp"
 #include "lua.h"
 #include "lualib.h"
-#include "script_console.hpp"
 #include <map>
 
 namespace fakeroblox {

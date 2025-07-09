@@ -40,6 +40,21 @@ std::unordered_map<lua_State*, Task*> TaskScheduler::task_map;
 
 std::vector<lua_State*> killed_tasks;
 
+Task::Task(lua_State* thread, int thread_ref, Feedback feedback, TaskTiming timing, OnKill on_kill)
+    : thread(thread), thread_ref(thread_ref), feedback(feedback), timing(timing), on_kill(on_kill)
+{
+    char buffer[32];
+    std::snprintf(buffer, sizeof(buffer), "%p", static_cast<void*>(thread));
+    identifier = std::string(buffer);
+
+    TaskScheduler::task_map.emplace(thread, this);
+}
+
+Task::~Task() {
+    if (on_kill)
+        on_kill();
+}
+
 void TaskScheduler::queueTask(Task* task) {
     std::shared_lock lock(mutex);
     task_queue.push_back(task);
@@ -175,12 +190,12 @@ ThreadResumeResult resumeThread(lua_State* L, Task* task) {
     }
 }
 
-std::pair<lua_State*, Task*> createThread(lua_State* L, Feedback feedback) {
+std::pair<lua_State*, Task*> createThread(lua_State* L, Feedback feedback, OnKill on_kill = nullptr) {
     lua_State* thread = lua_newthread(L);
     int thread_ref = lua_ref(L, -1);
     luaL_sandboxthread(thread);
 
-    Task* task = new Task(thread, thread_ref, feedback, {});
+    Task* task = new Task(thread, thread_ref, feedback, {}, on_kill);
 
     return std::make_pair(thread, task);
 }
@@ -199,16 +214,35 @@ std::optional<std::string> tryRunThreadMain(lua_State* L, Task* task) {
     return std::string("failed to start thread: ").append(std::get<std::string>(result));
 }
 
-std::optional<std::string> tryRunCode(lua_State* L, const char* chunk_name, const char* source, Feedback feedback) {
+std::optional<std::string> tryCreateThreadAndSpawnFunction(lua_State* L, Feedback feedback, Console* console) {
+    luaL_checktype(L, lua_gettop(L), LUA_TFUNCTION);
+    auto thread_pair = createThread(L, feedback);
+    lua_pop(L, 1);
+
+    lua_State* thread = thread_pair.first;
+    Task* task = thread_pair.second;
+
+    if (console)
+        task->console = console;
+
+    task->arg_count = 0;
+    lua_xmove(L, thread, 1);
+
+    return tryRunThreadMain(L, task);
+}
+
+std::optional<std::string> tryRunCode(lua_State* L, const char* chunk_name, const char* source, Feedback feedback, OnKill on_kill, Console* console) {
     size_t bytecode_size = 0;
     char* bytecode = luau_compile(source, std::strlen(source), NULL, &bytecode_size);
     if (!bytecode)
         return "failed to allocate memory for compiled bytecode";
 
-    auto thread_pair = createThread(L, feedback);
+    auto thread_pair = createThread(L, feedback, on_kill);
     lua_pop(L, 1);
     lua_State* thread = thread_pair.first;
     Task* task = thread_pair.second;
+    if (console)
+        task->console = console;
 
     int r = luau_load(thread, chunk_name, bytecode, bytecode_size, 0);
     free(bytecode);

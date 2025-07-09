@@ -1,7 +1,9 @@
 #include "libraries/instructionlib.hpp"
 
 #include "common.hpp"
-#include "script_console.hpp"
+#include "console.hpp"
+
+#include <cassert>
 
 #include "lua.h"
 #include "lualib.h"
@@ -10,7 +12,6 @@
 #include "lobject.h"
 #include "lapi.cpp"
 #include "Luau/Bytecode.h"
-#include <cassert>
 
 namespace fakeroblox {
 
@@ -378,7 +379,7 @@ void stephook(lua_State* L, lua_Debug* ar) {
 
     Closure* this_cl = clvalue(L->ci->func);
     if (pc <= this_cl->l.p->code) {
-        ScriptConsole::error("[step]: pc is out of range; it should be past the first instruction");
+        Console::ScriptConsole.error("[step]: pc is out of range; it should be past the first instruction");
         return;
     }
     const Instruction insn = *--pc;
