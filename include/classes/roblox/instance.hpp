@@ -61,9 +61,7 @@ public:
     bool destroyed = false;
 
     rbxInstance(std::shared_ptr<rbxClass> _class);
-    // ~rbxInstance() {
-    //     printf("destroying instance... %p\n", this);
-    // }
+    ~rbxInstance();
 
     template<class T>
     T& getValue(std::string name);
@@ -71,6 +69,7 @@ public:
     template<class T>
     void setValue(std::string name, T value);
 
+    void destroy(lua_State* L);
     std::shared_ptr<rbxInstance> findFirstChild(std::string name);
 };
 

@@ -4,6 +4,7 @@
 #include <fstream>
 
 #include "classes/roblox/instance.hpp"
+#include "classes/vector2.hpp"
 #include "libraries/instructionlib.hpp"
 #include "libraries/signallib.hpp"
 #include "raylib.h"
@@ -131,6 +132,7 @@ int main(int argc, char** argv) {
 
     open_tasklib(L);
     open_instructionlib(L);
+    open_vector2lib(L);
     setup_signallib(L);
 
     rbxInstanceSetup(L, api_dump);

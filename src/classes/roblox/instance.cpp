@@ -1,6 +1,5 @@
 #include "classes/roblox/instance.hpp"
 #include "common.hpp"
-#include "lstate.h" // for namecall
 #include "lua.h"
 #include "lualib.h"
 #include "script_console.hpp"
@@ -15,6 +14,10 @@ static std::map<std::string, std::shared_ptr<rbxClass>> class_map;
 
 rbxInstance::rbxInstance(std::shared_ptr<rbxClass> _class) : _class(_class) {}
 
+rbxInstance::~rbxInstance() {
+    // ScriptConsole::debugf("destroying instance... %p, %s\n", this, getValue<std::string>(PROP_INSTANCE_NAME).c_str());
+}
+
 template<class T>
 T& rbxInstance::getValue(std::string name) {
     return std::get<T>(values.at(name).value);
@@ -25,6 +28,24 @@ void rbxInstance::setValue(std::string name, T value) {
     std::get<T>(values.at(name).value) = value;
 }
 
+void rbxInstance::destroy(lua_State* L) {
+    if (destroyed)
+        return;
+
+    // FIXME: full destroy behavior (connections disconnected, etc)
+    for (auto& child : children)
+        child->destroy(L);
+
+    lua_pushnil(L);
+    lua_setfield(L, 1, PROP_INSTANCE_PARENT);
+
+    destroyed = true;
+
+    lua_getfield(L, LUA_REGISTRYINDEX, "instancelookup");
+    lua_pushlightuserdata(L, this);
+    lua_pushnil(L);
+    lua_rawset(L, -3);
+}
 std::shared_ptr<rbxInstance> rbxInstance::findFirstChild(std::string name) {
     for (auto& child : children)
         if (child->getValue<std::string>(PROP_INSTANCE_NAME) == name)
@@ -51,19 +72,12 @@ std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int arg) {
 namespace rbxInstance_methods {
     int destroy(lua_State *L) {
         // FIXME: synchronize
-        std::shared_ptr<rbxInstance>& instance = lua_checkinstance(L, 1);
-        if (instance->destroyed)
-            return 0;
-
-        lua_pushnil(L);
-        lua_setfield(L, 1, PROP_INSTANCE_PARENT);
-
-        instance->destroyed = true;
-
+        std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
+        instance->destroy(L);
         return 0;
     }
     int findFirstChild(lua_State* L) {
-        std::shared_ptr<rbxInstance>& instance = lua_checkinstance(L, 1);
+        std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
         const char* name = luaL_checkstring(L, 2);
 
         lua_pushinstance(L, instance->findFirstChild(name));
@@ -72,7 +86,7 @@ namespace rbxInstance_methods {
 }; // namespace rbxInstance_methods
 
 int rbxInstance__index(lua_State* L) {
-    std::shared_ptr<rbxInstance>& instance = lua_checkinstance(L, 1);
+    std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     auto class_name = instance->getValue<std::string>(PROP_INSTANCE_CLASS_NAME);
@@ -128,7 +142,7 @@ int rbxInstance__index(lua_State* L) {
 };
 
 int rbxInstance__tostring(lua_State* L) {
-    std::shared_ptr<rbxInstance>& instance = lua_checkinstance(L, 1);
+    std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
     auto name = instance->getValue<std::string>(PROP_INSTANCE_NAME);
     lua_pushlstring(L, name.c_str(), name.size());
     return 1;
@@ -139,7 +153,7 @@ const char* getOptionalInstanceName(std::shared_ptr<rbxInstance> instance) {
     return instance->getValue<std::string>(PROP_INSTANCE_NAME).c_str();
 }
 int rbxInstance__newindex(lua_State* L) {
-    std::shared_ptr<rbxInstance>& instance = lua_checkinstance(L, 1);
+    std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
     const char* key = luaL_checkstring(L, 2);
     luaL_checkany(L, 3);
 
@@ -197,6 +211,9 @@ int rbxInstance__newindex(lua_State* L) {
                 if (instance->destroyed)
                     luaL_error(L, "The Parent property of %s is locked, current parent: %s, new parent %s", getOptionalInstanceName(instance), getOptionalInstanceName(old_parent), getOptionalInstanceName(new_value));
 
+                if (new_value == instance)
+                    luaL_error(L, "Attempt to set %s as its own parent", getOptionalInstanceName(instance));
+
                 if (old_parent)
                     old_parent->children.erase(std::find(old_parent->children.begin(), old_parent->children.end(), instance));
 
@@ -217,17 +234,18 @@ int rbxInstance__newindex(lua_State* L) {
     return 0;
 };
 int rbxInstance__namecall(lua_State* L) {
-    std::shared_ptr<rbxInstance>& instance = lua_checkinstance(L, 1);
-    if (!L->namecall)
+    std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
+    const char* namecall = lua_namecallatom(L, nullptr);
+    if (!namecall)
         luaL_error(L, "no namecall method!");
-    std::string method_name = getstr(L->namecall);
+    std::string method_name = namecall;
 
     // FIXME: methods should have a func ptr that gets set in newInstance
 
     if (instance->methods.find(method_name) == instance->methods.end()) {
         auto name = instance->getValue<std::string>(PROP_INSTANCE_NAME);
         auto class_name = instance->getValue<std::string>(PROP_INSTANCE_CLASS_NAME);
-        luaL_error(L, "%s is not a valid member of %s \"%s\"", method_name.c_str(), class_name.c_str(), name.c_str());
+        luaL_error(L, "%s is not a valid member of %s \"%s\"", namecall, class_name.c_str(), name.c_str());
     }
 
     int top = lua_gettop(L);
@@ -237,11 +255,11 @@ int rbxInstance__namecall(lua_State* L) {
         method_name = *method.route;
 
     if (method_name == "Destroy")
-        lua_pushcfunction(L, rbxInstance_methods::destroy, method_name.c_str());
+        lua_pushcfunction(L, rbxInstance_methods::destroy, namecall);
     else if (method_name == "FindFirstChild")
-        lua_pushcfunction(L, rbxInstance_methods::findFirstChild, method_name.c_str());
+        lua_pushcfunction(L, rbxInstance_methods::findFirstChild, namecall);
     else
-        luaL_error(L, "INTERNAL ERROR: TODO implement '%s'", method_name.c_str());
+        luaL_error(L, "INTERNAL ERROR: TODO implement '%s'", namecall);
 
     for (int i = 0; i < top; i++) {
         lua_pushvalue(L, 1);

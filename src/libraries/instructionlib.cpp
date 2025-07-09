@@ -10,7 +10,6 @@
 #include "lobject.h"
 #include "lapi.cpp"
 #include "Luau/Bytecode.h"
-#include "Luau/Common.h"
 #include <cassert>
 
 namespace fakeroblox {
@@ -73,7 +72,7 @@ int instruction__index(lua_State* L) {
     return 1;
 
     INVALID:
-    luaL_error(L, "'%s' is not a valid member of instruction", key);
+    luaL_error(L, "%s is not a valid member of instruction", key);
 }
 int instruction__newindex(lua_State* L) {
     InstructionWrapper* insn = lua_checkinstruction(L, 1);
@@ -116,11 +115,11 @@ int instruction__newindex(lua_State* L) {
 }
 int instruction__namecall(lua_State* L) {
     InstructionWrapper* insn = lua_checkinstruction(L, 1);
-    if (!L->namecall)
+    const char* namecall = lua_namecallatom(L, nullptr);
+    if (!namecall)
         luaL_error(L, "no namecall method!");
 
-    const char* method = getstr(L->namecall);
-    if (strequal(method, "set"))
+    if (strequal(namecall, "set"))
         insn->insn = luaL_checkunsigned(L, 2);
 
     return 0;
