@@ -8,6 +8,7 @@ In its current state, building fakeroblox is a pain sorry. `./build.sh --release
 * Instance system
 * 1:1 Roblox error messages
 * 2d graphics
+* exploit functions (most similar to Synapse)
 
 # NONGOALS
 * 3d graphics
