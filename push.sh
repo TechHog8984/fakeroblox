@@ -7,7 +7,6 @@ if [ ! -f "$FILE" ]; then
   exit 1
 fi
 
-echo "PUSHING"
-# git push || exit 1
+git push || exit 1
 
 rm $FILE
