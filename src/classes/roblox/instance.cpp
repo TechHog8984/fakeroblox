@@ -1,4 +1,5 @@
 #include "classes/roblox/instance.hpp"
+#include "classes/roblox/datamodel.hpp"
 #include "common.hpp"
 #include "lua.h"
 #include "lualib.h"
@@ -9,7 +10,7 @@ namespace fakeroblox {
 #define LUA_TAG_RBXINSTANCE 1
 
 static std::vector<std::string> valid_class_names;
-static std::map<std::string, std::shared_ptr<rbxClass>> class_map;
+std::map<std::string, std::shared_ptr<rbxClass>> rbxClass::class_map;
 
 rbxInstance::rbxInstance(std::shared_ptr<rbxClass> _class) : _class(_class) {}
 
@@ -40,7 +41,7 @@ void rbxInstance::destroy(lua_State* L) {
 
     destroyed = true;
 
-    lua_getfield(L, LUA_REGISTRYINDEX, "instancelookup");
+    lua_getfield(L, LUA_REGISTRYINDEX, INSTANCELOOKUP);
     lua_pushlightuserdata(L, this);
     lua_pushnil(L);
     lua_rawset(L, -3);
@@ -52,20 +53,19 @@ std::shared_ptr<rbxInstance> rbxInstance::findFirstChild(std::string name) {
     return nullptr;
 }
 
-std::shared_ptr<rbxInstance>& lua_checkinstance(lua_State* L, int arg) {
-    luaL_checkany(L, arg);
-    void* ud = luaL_checkudata(L, arg, "Instance");
+std::shared_ptr<rbxInstance>& lua_checkinstance(lua_State* L, int narg) {
+    void* ud = luaL_checkudata(L, narg, "Instance");
 
     return *static_cast<std::shared_ptr<rbxInstance>*>(ud);
 }
-std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int arg) {
-    if (lua_gettop(L) < arg)
+std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int narg) {
+    if (lua_gettop(L) < narg)
         return nullptr;
 
-    if (lua_type(L, arg) == LUA_TNIL)
+    if (lua_type(L, narg) == LUA_TNIL)
         return nullptr;
 
-    return lua_checkinstance(L, arg);
+    return lua_checkinstance(L, narg);
 }
 
 namespace rbxInstance_methods {
@@ -82,6 +82,40 @@ namespace rbxInstance_methods {
         lua_pushinstance(L, instance->findFirstChild(name));
         return 1;
     }
+    int getChildren(lua_State* L) {
+        // FIXME: synchronize
+        std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
+        auto& children = instance->children;
+
+        lua_createtable(L, children.size(), 0);
+
+        for (size_t i = 0; i < children.size(); i++) {
+            auto& child = children[i];
+            lua_pushnumber(L, i + 1);
+            lua_pushinstance(L, child);
+            lua_settable(L, -3);
+        }
+
+        return 1;
+    }
+    int getFullName(lua_State* L) {
+        std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
+
+        std::string result;
+        rbxInstance* inst = instance.get();
+        do {
+            result.insert(result.begin(), '.');
+            result.insert(0, inst->getValue<std::string>(PROP_INSTANCE_NAME));
+            inst = inst->getValue<std::shared_ptr<rbxInstance>>(PROP_INSTANCE_PARENT).get();
+        } while (inst);
+
+        size_t last = result.size() - 1;
+        if (!result.empty() && result.at(last) == '.')
+            result.erase(last);
+
+        lua_pushlstring(L, result.c_str(), result.size());
+        return 1;
+    }
 }; // namespace rbxInstance_methods
 
 int rbxInstance__tostring(lua_State* L) {
@@ -92,17 +126,18 @@ int rbxInstance__tostring(lua_State* L) {
 }
 
 int pushMethod(lua_State* L, std::shared_ptr<rbxInstance>& instance, std::string method_name) {
-    std::string original = method_name;
-    rbxMethod& method = instance->methods[method_name];
+    rbxMethod method = instance->methods[method_name];
     if (method.route)
-        method_name = *method.route;
+        method = instance->methods[*method.route];
+
+    assert(!method.route);
 
     if (method.func)
-        lua_pushcfunction(L, method.func, original.c_str());
+        return pushFunctionFromLookup(L, method.func, method.name, method.cont);
     else
-        luaL_error(L, "INTERNAL ERROR: TODO implement '%s'", original.c_str());
+        luaL_error(L, "INTERNAL ERROR: TODO implement '%s'", method.name.c_str());
 
-    return 1;
+    return 0;
 }
 
 int rbxInstance__index(lua_State* L) {
@@ -263,16 +298,7 @@ int rbxInstance__namecall(lua_State* L) {
         luaL_error(L, "%s is not a valid member of %s \"%s\"", namecall, class_name.c_str(), name.c_str());
     }
 
-    int top = lua_gettop(L);
-
-    pushMethod(L, instance, method_name);
-    for (int i = 0; i < top; i++) {
-        lua_pushvalue(L, 1);
-        lua_remove(L, 1);
-    }
-    lua_call(L, top, LUA_MULTRET);
-
-    return lua_gettop(L);
+    return instance->methods[method_name].func(L);
 }
 
 void rbxInstance__dtor(lua_State* L, std::shared_ptr<rbxInstance> ptr) {
@@ -280,7 +306,7 @@ void rbxInstance__dtor(lua_State* L, std::shared_ptr<rbxInstance> ptr) {
 }
 
 std::shared_ptr<rbxInstance> newInstance(const char* class_name) {
-    std::shared_ptr<rbxClass> _class = class_map[class_name];
+    std::shared_ptr<rbxClass> _class = rbxClass::class_map[class_name];
     std::shared_ptr<rbxInstance> instance = std::make_shared<rbxInstance>(_class);
 
     rbxClass* c = _class.get();
@@ -305,33 +331,20 @@ int lua_pushinstance(lua_State* L, std::shared_ptr<rbxInstance> instance) {
         return 1;
     }
 
-    lua_getfield(L, LUA_REGISTRYINDEX, "instancelookup");
-    lua_pushlightuserdata(L, instance.get());
-    lua_rawget(L, -2);
-
-    if (lua_isnil(L, -1)) {
-        lua_pop(L, 1);
+    return pushFromLookup(L, INSTANCELOOKUP, instance.get(), [&L, &instance](){
         void* ud = lua_newuserdatatagged(L, sizeof(std::shared_ptr<rbxInstance>), LUA_TAG_RBXINSTANCE);
         new(ud) std::shared_ptr<rbxInstance>(instance);
 
         luaL_getmetatable(L, "Instance");
         lua_setmetatable(L, -2);
-
-        lua_pushlightuserdata(L, instance.get());
-        lua_pushvalue(L, -2);
-        lua_rawset(L, -4);
-    }
-
-    lua_remove(L, -2);
-
-    return 1;
+    });
 }
 namespace rbxInstance_datatype {
     int _new(lua_State* L) {
         const char* class_name = luaL_checkstring(L, 1);
         std::shared_ptr<rbxInstance> parent = lua_optinstance(L, 2);
 
-        if (class_map.find(class_name) == class_map.end()) {
+        if (rbxClass::class_map.find(class_name) == rbxClass::class_map.end()) {
             // std::string msg = "'";
             // msg.append(class_name) += '\'';
             // msg.append(" is not a valid class name");
@@ -339,7 +352,7 @@ namespace rbxInstance_datatype {
             luaL_error(L, "Unable to create an Instance of type \"%s\"", class_name);
         }
 
-        std::shared_ptr<rbxClass> _class = class_map[class_name];
+        std::shared_ptr<rbxClass> _class = rbxClass::class_map[class_name];
         if (_class->tags & rbxClass::NotCreatable)
             luaL_error(L, "Unable to create an Instance of type \"%s\"", class_name);
 
@@ -442,28 +455,28 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
             }
         }
 
-        class_map[class_name] = _class;
+        rbxClass::class_map[class_name] = _class;
     }
 
     for (auto& pair : superclass_map)
-        class_map[pair.first]->superclass = class_map[pair.second];
+        rbxClass::class_map[pair.first]->superclass = rbxClass::class_map[pair.second];
 
     superclass_map.clear();
 
-    class_map["Instance"]->methods["Destroy"].func = rbxInstance_methods::destroy;
-    class_map["Instance"]->methods["FindFirstChild"].func = rbxInstance_methods::findFirstChild;
+    rbxClass::class_map["Instance"]->methods.at("Destroy").func = rbxInstance_methods::destroy;
+    rbxClass::class_map["Instance"]->methods.at("FindFirstChild").func = rbxInstance_methods::findFirstChild;
+    rbxClass::class_map["Instance"]->methods.at("GetChildren").func = rbxInstance_methods::getChildren;
+    rbxClass::class_map["Instance"]->methods.at("GetFullName").func = rbxInstance_methods::getFullName;
+
+    rbxInstance_DataModel_init(L);
 
     // metatable
     luaL_newmetatable(L, "Instance");
 
-    lua_pushcfunction(L, rbxInstance__tostring, "__tostring");
-    lua_setfield(L, -2, "__tostring");
-    lua_pushcfunction(L, rbxInstance__index, "__index");
-    lua_setfield(L, -2, "__index");
-    lua_pushcfunction(L, rbxInstance__newindex, "__newindex");
-    lua_setfield(L, -2, "__newindex");
-    lua_pushcfunction(L, rbxInstance__namecall, "__namecall");
-    lua_setfield(L, -2, "__namecall");
+    setfunctionfield(L, rbxInstance__tostring, "__tostring");
+    setfunctionfield(L, rbxInstance__index, "__index");
+    setfunctionfield(L, rbxInstance__newindex, "__newindex");
+    setfunctionfield(L, rbxInstance__namecall, "__namecall");
 
     lua_pop(L, 1);
 
@@ -476,13 +489,8 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
     lua_setglobal(L, "Instance");
 
     // instancelookup
-    lua_newtable(L);
-    lua_pushvalue(L, -1);
-    lua_setmetatable(L, -2);
-    lua_pushstring(L, "kvs");
-    lua_setfield(L, -2, "__mode");
-
-    lua_setfield(L, LUA_REGISTRYINDEX, "instancelookup");
+    newweaktable(L);
+    lua_setfield(L, LUA_REGISTRYINDEX, INSTANCELOOKUP);
 
     lua_setuserdatadtor(L, LUA_TAG_RBXINSTANCE, (lua_Destructor) rbxInstance__dtor);
 

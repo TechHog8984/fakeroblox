@@ -55,6 +55,7 @@ public:
 class Task {
 public:
     lua_State* thread;
+    lua_State* parent_thread;
     Console* console = &Console::ScriptConsole;
     std::string identifier;
     int thread_ref;
@@ -71,7 +72,7 @@ public:
     bool canceled = false;
     bool finished = false;
 
-    Task(lua_State* thread, int thread_ref, Feedback feedback, TaskTiming timing, OnKill on_kill = nullptr);
+    Task(lua_State* thread, lua_State* parent_thread, int thread_ref, Feedback feedback, TaskTiming timing, OnKill on_kill = nullptr);
     ~Task();
 };
 

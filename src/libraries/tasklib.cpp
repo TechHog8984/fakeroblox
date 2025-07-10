@@ -40,8 +40,8 @@ std::unordered_map<lua_State*, Task*> TaskScheduler::task_map;
 
 std::vector<lua_State*> killed_tasks;
 
-Task::Task(lua_State* thread, int thread_ref, Feedback feedback, TaskTiming timing, OnKill on_kill)
-    : thread(thread), thread_ref(thread_ref), feedback(feedback), timing(timing), on_kill(on_kill)
+Task::Task(lua_State* thread, lua_State* parent_thread, int thread_ref, Feedback feedback, TaskTiming timing, OnKill on_kill)
+    : thread(thread), parent_thread(parent_thread), thread_ref(thread_ref), feedback(feedback), timing(timing), on_kill(on_kill)
 {
     char buffer[32];
     std::snprintf(buffer, sizeof(buffer), "%p", static_cast<void*>(thread));
@@ -195,7 +195,7 @@ std::pair<lua_State*, Task*> createThread(lua_State* L, Feedback feedback, OnKil
     int thread_ref = lua_ref(L, -1);
     luaL_sandboxthread(thread);
 
-    Task* task = new Task(thread, thread_ref, feedback, {}, on_kill);
+    Task* task = new Task(thread, L, thread_ref, feedback, {}, on_kill);
 
     return std::make_pair(thread, task);
 }

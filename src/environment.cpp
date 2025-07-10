@@ -1,4 +1,5 @@
 #include "environment.hpp"
+#include "common.hpp"
 
 #include <string>
 
@@ -35,6 +36,15 @@ static int fr_loadstring(lua_State* L) {
 }
 
 void open_fakeroblox_environment(lua_State *L) {
+    // methodlookup
+    newweaktable(L);
+    lua_setfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
+
+    lua_pushcfunction(L, fakeroblox::fr_print, "print");
+    lua_setglobal(L, "print");
+    lua_pushcfunction(L, fakeroblox::fr_warn, "warn");
+    lua_setglobal(L, "warn");
+
     expose(getreg)
     expose(loadstring)
 }

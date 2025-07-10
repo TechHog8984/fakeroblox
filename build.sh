@@ -116,7 +116,7 @@ mkdir $fakerobloxbuilddir
 
 echo "building fakeroblox..."
 pushd $fakerobloxbuilddir
-$compiler -std=c++17 -g -Wall $RELEASE_FLAGS $ASAN_FLAGS -c ../../../src/*.cpp ../../../src/*/*.cpp ../../../src/*/*/*.cpp -I../../../include $LUAU_INCLUDE_BUILD -L../Luau -lluau \
+$compiler -std=c++17 -g -Wall $RELEASE_FLAGS $ASAN_FLAGS -c ../../../src/*.cpp ../../../src/*/*.cpp ../../../src/*/*/*.cpp -I../../../include $LUAU_INCLUDE_BUILD -lcurl -L../Luau -lluau \
     -I../../../dependencies/rlImGui/imgui-master || exit 1
 ar rcs libfakeroblox.a *.o || exit 1
 popd
@@ -124,6 +124,6 @@ echo "fakeroblox built"
 
 echo "buildling cli..."
 $compiler -std=c++17 -g -Wall $RELEASE_FLAGS $ASAN_FLAGS $STATIC_FLAGS -o $outfile main.cpp -Iinclude $LUAU_INCLUDE \
-    -Idependencies/rlImGui -Idependencies/rlImGui/imgui-master -Idependencies/ImGuiColorTextEdit -lraylib \
+    -Idependencies/rlImGui -Idependencies/rlImGui/imgui-master -Idependencies/ImGuiColorTextEdit -lcurl -lraylib \
     -L$fakerobloxbuilddir -lfakeroblox -L$luaubuilddir -lluau -L$rlimguibuilddir -lrlimgui || exit 1
 echo "cli built to $outfile"

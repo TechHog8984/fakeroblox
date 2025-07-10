@@ -26,7 +26,10 @@ namespace fakeroblox {
             local elapsed = (os.clock() - time_before) \
             assert(elapsed >= count, 'not enough time was elapsed') \
             print('waited for ' .. elapsed .. ' seconds')"
-        }
+        },
+        { .name = "instance cache", .value = "assert(game.Workspace == workspace) "},
+        { .name = "instance method cache", .value = "assert(game.Destroy == workspace.Destroy)" },
+        { .name = "instance method route", .value = "assert(game.children == game.GetChildren)" }
     };
     constexpr int test_count = sizeof(test_list) / sizeof(test_list[0]);
 
@@ -45,8 +48,7 @@ namespace fakeroblox {
             auto& test = test_list[i];
             Console::TestsConsole.debugf("Spawning test %s...", test.name);
 
-            auto gate = std::make_shared<ThreadGate>();
-            thread_list.emplace_back([&L, &fail, &mutex, &test, &gate] () {
+            thread_list.emplace_back([&L, &fail, &mutex, &test] () {
                 std::lock_guard<std::shared_mutex> lock(mutex);
                 bool feedback_ran = false;
                 Feedback feedback = [&fail, &test, &feedback_ran](std::string error) {
@@ -59,20 +61,19 @@ namespace fakeroblox {
                     }
                 };
 
-                bool ran_code = false;
                 if (std::holds_alternative<lua_CFunction>(test.value)) {
                     lua_pushcfunction(L, std::get<lua_CFunction>(test.value), test.name);
 
                     auto error = tryCreateThreadAndSpawnFunction(L, feedback, &Console::TestsConsole);
                     if (error) feedback(*error);
                 } else {
-                    ran_code = true;
+                    auto gate = std::make_shared<ThreadGate>();
                     auto error = tryRunCode(L, "TEST", std::get<std::string>(test.value).c_str(), feedback, gate->func, &Console::TestsConsole);
                     if (error) feedback(*error);
 
                     gate->wait();
 
-                    if (ran_code && !feedback_ran)
+                    if (!feedback_ran)
                         feedback(PASS_ERROR);
                 }
             });

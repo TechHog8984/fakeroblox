@@ -1,10 +1,13 @@
 #include <cfloat>
 #include <cstdio>
 #include <cstring>
+#include <curl/curl.h>
 #include <fstream>
 #include <thread>
 
+#include "classes/color3.hpp"
 #include "environment.hpp"
+#include "libraries/drawentrylib.hpp"
 #include "raylib.h"
 #include "rlImGui.h"
 #include "imgui.h"
@@ -49,27 +52,6 @@ int imgui_inputTextCallback(ImGuiInputTextCallbackData* data) {
         data->Buf = (char*) str->c_str();
     }
     return 0;
-}
-
-int fakeroblox_log(lua_State* L, Console::Message::Type type) {
-    std::string message;
-    int n = lua_gettop(L);
-    for (int i = 0; i < n; i++) {
-        size_t l;
-        const char* s = luaL_tolstring(L, i + 1, &l);
-        if (i > 0)
-            message += '\t';
-        message.append(s, l);
-        lua_pop(L, 1);
-    }
-    TaskScheduler::getTaskFromThread(L)->console->log(message, type);
-    return 0;
-}
-int fakeroblox::fakeroblox_print(lua_State* L) {
-    return fakeroblox_log(L, Console::Message::INFO);
-}
-int fakeroblox::fakeroblox_warn(lua_State* L) {
-    return fakeroblox_log(L, Console::Message::WARNING);
 }
 
 size_t next_script_editor_tab_index = 0;
@@ -120,24 +102,29 @@ int main(int argc, char** argv) {
 
     api_dump_file.close();
 
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
-
-    lua_pushcfunction(L, fakeroblox::fakeroblox_print, "print");
-    lua_setglobal(L, "print");
-    lua_pushcfunction(L, fakeroblox::fakeroblox_warn, "warn");
-    lua_setglobal(L, "warn");
 
     open_fakeroblox_environment(L);
 
     open_tasklib(L);
     open_instructionlib(L);
     open_vector2lib(L);
+    open_color3lib(L);
+    open_drawentrylib(L);
     setup_signallib(L);
 
     rbxInstanceSetup(L, api_dump);
 
+    lua_newtable(L);
+    lua_setglobal(L, "shared");
+
     luaL_sandbox(L);
+
+    lua_getglobal(L, "shared");
+    lua_setreadonly(L, -1, false);
 
     SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
@@ -159,8 +146,28 @@ int main(int argc, char** argv) {
         TaskScheduler::run(L);
 
         BeginDrawing();
-        ClearBackground(RAYWHITE);
+        ClearBackground(DARKGRAY);
 
+        // lua drawings
+        // FIXME: entry could get freed by luau garbage collector, so these should be shared pointers maybe
+        for (auto& entry : DrawEntry::draw_list) {
+            if (!entry->visible)
+                continue;
+
+            auto& color = entry->color;
+            switch (entry->type) {
+                case DrawEntry::Line: {
+                    DrawEntryLine* entry_line = static_cast<DrawEntryLine*>(entry);
+                    DrawLineEx(entry_line->from, entry_line->to, entry_line->thickness, color);
+                    break;
+                }
+                default:
+                    Console::ScriptConsole.debugf("INTERNAL TODO: all DrawEntry types (%s)", entry->class_name);
+                    break;
+            }
+        }
+
+        // ui
         rlImGuiBegin();
         const float imgui_frame_height = ImGui::GetFrameHeightWithSpacing();
 
@@ -176,6 +183,7 @@ int main(int argc, char** argv) {
             ImGui::EndMainMenuBar();
         }
 
+        // TODO: open_file, execute_file, save_file buttons
         if (menu_editor_open) {
             if (ImGui::Begin("Script Editor", &menu_editor_open)) {
                 if (ImGui::Button("+##scripteditornewtab"))
@@ -227,8 +235,8 @@ int main(int argc, char** argv) {
                     ImGui::EndTabBar();
                 }
 
-                ImGui::End();
             }
+            ImGui::End();
         }
         if (menu_console_open) {
             if (ImGui::Begin("Script Console", &menu_console_open)) {
@@ -272,8 +280,8 @@ int main(int argc, char** argv) {
 
                     ImGui::EndChild();
                 }
-                ImGui::End();
             }
+            ImGui::End();
         }
         if (menu_tests_open) {
             if (ImGui::Begin("Tests", &menu_tests_open)) {
@@ -289,8 +297,8 @@ int main(int argc, char** argv) {
                 Console::TestsConsole.renderMessages();
                 ImGui::EndChild();
 
-                ImGui::End();
             }
+            ImGui::End();
         }
         if (menu_thread_list_open) {
             if (ImGui::Begin("Thread List", &menu_thread_list_open)) {
@@ -313,8 +321,8 @@ int main(int argc, char** argv) {
                 }
                 for (size_t i = 0; i < tasks_to_kill.size(); i++)
                     TaskScheduler::killTask(L, tasks_to_kill[i]);
-                ImGui::End();
             }
+            ImGui::End();
         }
 
         rlImGuiEnd();
@@ -335,6 +343,8 @@ int main(int argc, char** argv) {
     TaskScheduler::cleanup(L);
     rbxInstanceCleanup(L);
     lua_close(L);
+
+    curl_global_cleanup();
 
     return 0;
 }

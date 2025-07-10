@@ -16,7 +16,18 @@ namespace fakeroblox {
 using Feedback = std::function<void(std::string)>;
 using OnKill = std::function<void()>;
 
-int fakeroblox_print(lua_State* L);
-int fakeroblox_warn(lua_State* L);
+double luaL_checknumberrange(lua_State* L, int narg, double min, double max);
+
+int newweaktable(lua_State* L);
+int pushFromLookup(lua_State* L, const char* lookup, void* ptr, std::function<void()> pushValue);
+int pushFunctionFromLookup(lua_State* L, lua_CFunction func, std::string name = nullptr, lua_Continuation cont = nullptr);
+
+#define INSTANCELOOKUP "instancelookup"
+#define METHODLOOKUP "methodlookup"
+
+int fr_print(lua_State* L);
+int fr_warn(lua_State* L);
+
+void setfunctionfield(lua_State* L, lua_CFunction func, const char* method, bool lookup = false);
 
 }; // namespace fakeroblox

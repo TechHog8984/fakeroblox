@@ -355,18 +355,14 @@ void open_instructionlib(lua_State *L) {
     lua_pushnumber(L, LOP_IDIVK);
     lua_setfield(L, -2, "LOP_IDIVK");
 
-    lua_pushvalue(L, -1);
-    lua_setglobal(L, "instruction");
-    lua_setfield(L, LUA_REGISTRYINDEX, "instructionlib");
+    lua_setglobal(L, "instructionlib");
 
+    // metatable
     luaL_newmetatable(L, "InstructionWrapper");
 
-    lua_pushcfunction(L, instruction__index, "__index");
-    lua_setfield(L, -2, "__index");
-    lua_pushcfunction(L, instruction__newindex, "__newindex");
-    lua_setfield(L, -2, "__newindex");
-    lua_pushcfunction(L, instruction__namecall, "__namecall");
-    lua_setfield(L, -2, "__namecall");
+    setfunctionfield(L, instruction__index, "__index");
+    setfunctionfield(L, instruction__newindex, "__newindex");
+    setfunctionfield(L, instruction__namecall, "__namecall");
 
     lua_pop(L, 1);
 
@@ -379,11 +375,12 @@ void stephook(lua_State* L, lua_Debug* ar) {
 
     Closure* this_cl = clvalue(L->ci->func);
     if (pc <= this_cl->l.p->code) {
-        Console::ScriptConsole.error("[step]: pc is out of range; it should be past the first instruction");
+        Console::ScriptConsole.error("[instructionlib stephook]: pc is out of range; it should be past the first instruction");
         return;
     }
     const Instruction insn = *--pc;
 
+    // FIXME: use a signal: instructionlib.stephook:Connect(function(...) end)
     lua_getglobal(L, "debugstephook");
 
     if (!lua_isnil(L, -1)) {

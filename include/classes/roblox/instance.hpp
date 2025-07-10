@@ -36,10 +36,13 @@ struct rbxMethod {
     std::string name;
     std::optional<std::string> route = std::nullopt;
     lua_CFunction func = nullptr;
+    lua_Continuation cont = nullptr;
 };
 
 class rbxClass {
 public:
+    static std::map<std::string, std::shared_ptr<rbxClass>> class_map;
+
     enum Tags : uint8_t {
         NotCreatable = 1 << 0,
     };
@@ -48,6 +51,14 @@ public:
     std::shared_ptr<rbxClass> superclass;
     std::map<std::string, std::shared_ptr<rbxProperty>> properties;
     std::map<std::string, rbxMethod> methods;
+
+    void newMethod(const char* name, lua_CFunction func, lua_Continuation cont = nullptr) {
+        rbxMethod method;
+        method.name = name;
+        method.func = func;
+        method.cont = cont;
+        methods.try_emplace(name, method);
+    }
 };
 
 class rbxValue;
@@ -105,8 +116,8 @@ public:
 
 #define METHOD_INSTANCE_DESTROY "Destroy"
 
-std::shared_ptr<rbxInstance>& lua_checkinstance(lua_State* L, int arg);
-std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int arg);
+std::shared_ptr<rbxInstance>& lua_checkinstance(lua_State* L, int narg);
+std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int narg);
 
 void rbxInstanceSetup(lua_State* L, std::string api_jump);
 void rbxInstanceCleanup(lua_State* L);
