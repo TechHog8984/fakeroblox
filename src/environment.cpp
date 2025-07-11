@@ -40,6 +40,10 @@ void open_fakeroblox_environment(lua_State *L) {
     newweaktable(L);
     lua_setfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
 
+    // string list
+    lua_newtable(L);
+    lua_setfield(L, LUA_REGISTRYINDEX, STRINGLOOKUP);
+
     lua_pushcfunction(L, fakeroblox::fr_print, "print");
     lua_setglobal(L, "print");
     lua_pushcfunction(L, fakeroblox::fr_warn, "warn");

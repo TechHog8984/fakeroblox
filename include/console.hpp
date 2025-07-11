@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "luaconf.h"
+
 namespace fakeroblox {
 
 class Console {
@@ -42,11 +44,11 @@ public:
     void error(std::string message);
     void debug(std::string message);
 
-    void logf(Message::Type type, const char* fmt, ...);
-    void debugf(const char* fmt, ...);
-    void infof(const char* fmt, ...);
-    void warningf(const char* fmt, ...);
-    void errorf(const char* fmt, ...);
+    void LUA_PRINTF_ATTR(3, 4) logf(Message::Type type, const char* fmt, ...);
+    void LUA_PRINTF_ATTR(2, 3) debugf(const char* fmt, ...);
+    void LUA_PRINTF_ATTR(2, 3) infof(const char* fmt, ...);
+    void LUA_PRINTF_ATTR(2, 3) warningf(const char* fmt, ...);
+    void LUA_PRINTF_ATTR(2, 3) errorf(const char* fmt, ...);
 };
 
 }; // namespace fakeroblox

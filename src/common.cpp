@@ -1,14 +1,24 @@
 #include "common.hpp"
 #include "libraries/tasklib.hpp"
 
+#include "lua.h"
 #include "lualib.h"
 #include <cassert>
+#include <cstring>
 
 namespace fakeroblox {
 
 double luaL_checknumberrange(lua_State* L, int narg, double min, double max) {
     double n = luaL_checknumber(L, narg);
     luaL_argcheck(L, n >= min && n <= max, narg, "invalid range");
+    return n;
+}
+double luaL_optnumberrange(lua_State* L, int narg, double min, double max, double def) {
+    double n = def;
+    if (lua_isnumber(L, narg)) {
+        n = lua_tonumber(L, narg);
+        luaL_argcheck(L, n >= min && n <= max, narg, "invalid range");
+    }
     return n;
 }
 
@@ -39,14 +49,48 @@ int pushFromLookup(lua_State* L, const char* lookup, void* ptr, std::function<vo
 
     return 1;
 }
-// FIXME: rbxInstance method names when erroring will appear something like: 'GetFullN[string "script1"]'
 int pushFunctionFromLookup(lua_State* L, lua_CFunction func, std::string name, lua_Continuation cont) {
-    return pushFromLookup(L, METHODLOOKUP, reinterpret_cast<void*>(func), [&L, &func, &name, &cont] {
+    return pushFromLookup(L, METHODLOOKUP, reinterpret_cast<void*>(func), [&L, func, name, cont] {
+        const char* namecstr = getFromStringLookup(L, addToStringLookup(L, name));
         if (cont)
-            lua_pushcclosurek(L, func, name.c_str(), 0, cont);
+            lua_pushcclosurek(L, func, namecstr, 0, cont);
         else
-            lua_pushcfunction(L, func, name.c_str());
+            lua_pushcfunction(L, func, namecstr);
     });
+}
+
+int addToStringLookup(lua_State *L, std::string string) {
+    lua_getfield(L, LUA_REGISTRYINDEX, STRINGLOOKUP);
+    lua_pushlstring(L, string.c_str(), string.size());
+
+    lua_getglobal(L, "table");
+    lua_getfield(L, -1, "find");
+    lua_remove(L, -2); // table
+
+    lua_pushvalue(L, -3); // stringlookup
+    lua_pushvalue(L, -3); // string
+
+    lua_call(L, 2, 1);
+
+    bool cached = lua_isnumber(L, -1);
+    int index = cached ? lua_tonumber(L, -1) : lua_objlen(L, -3) + 1;
+    lua_pop(L, 1); // table.find result
+
+    if (!cached)
+        lua_rawseti(L, -2, index); // stringlookup[index] = string
+
+    lua_pop(L, 1 + cached); // stringlookup and string (if cached)
+
+    return index;
+}
+const char* getFromStringLookup(lua_State *L, int index) {
+    lua_getfield(L, LUA_REGISTRYINDEX, STRINGLOOKUP);
+    lua_rawgeti(L, -1, index);
+
+    const char* str = lua_tostring(L, -1);
+
+    lua_pop(L, 2);
+    return str;
 }
 
 int log(lua_State* L, Console::Message::Type type) {

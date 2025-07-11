@@ -6,6 +6,7 @@
 
 namespace fakeroblox {
 
+int pushColor3(lua_State* L, double r, double g, double b);
 int pushColor3(lua_State* L, Color color);
 Color* lua_checkcolor3(lua_State* L, int narg);
 

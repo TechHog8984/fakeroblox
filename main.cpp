@@ -161,6 +161,44 @@ int main(int argc, char** argv) {
                     DrawLineEx(entry_line->from, entry_line->to, entry_line->thickness, color);
                     break;
                 }
+                case DrawEntry::Text: {
+                    DrawEntryText* entry_text = static_cast<DrawEntryText*>(entry);
+                    // FIXME: text outline
+                    // if (entry_text->outlined)
+                    //     DrawTextEx(entry_text->font, entry_text->text.c_str(), entry_text->outline_position, entry_text->outline_text_size, 0, entry_text->outline_color);
+                    DrawTextEx(entry_text->font, entry_text->text.c_str(), entry_text->position, entry_text->text_size, 0, color);
+                    break;
+                }
+                case DrawEntry::Square: {
+                    DrawEntrySquare* entry_square = static_cast<DrawEntrySquare*>(entry);
+                    DrawRectangleLinesEx(entry_square->rect, entry_square->thickness, color);
+                    if (entry_square->filled)
+                        DrawRectangleRec(entry_square->rect, color);
+                    break;
+                }
+                case DrawEntry::Triangle: {
+                    DrawEntryTriangle* entry_triangle = static_cast<DrawEntryTriangle*>(entry);
+                    // DrawTriangle* doesn't support thickness, so we use DrawLineEx
+                    DrawLineEx(entry_triangle->pointa, entry_triangle->pointb, entry_triangle->thickness, color);
+                    DrawLineEx(entry_triangle->pointb, entry_triangle->pointc, entry_triangle->thickness, color);
+                    DrawLineEx(entry_triangle->pointc, entry_triangle->pointa, entry_triangle->thickness, color);
+                    if (entry_triangle->filled)
+                        DrawTriangle(entry_triangle->pointc, entry_triangle->pointb, entry_triangle->pointa, color);
+                    break;
+                }
+                case DrawEntry::Quad: {
+                    DrawEntryQuad* entry_quad = static_cast<DrawEntryQuad*>(entry);
+                    // DrawTriangle* doesn't support thickness, so we use DrawLineEx
+                    DrawLineEx(entry_quad->pointa, entry_quad->pointb, entry_quad->thickness, color);
+                    DrawLineEx(entry_quad->pointb, entry_quad->pointc, entry_quad->thickness, color);
+                    DrawLineEx(entry_quad->pointc, entry_quad->pointd, entry_quad->thickness, color);
+                    DrawLineEx(entry_quad->pointd, entry_quad->pointa, entry_quad->thickness, color);
+                    if (entry_quad->filled) {
+                        DrawTriangle(entry_quad->pointc, entry_quad->pointb, entry_quad->pointa, color);
+                        DrawTriangle(entry_quad->pointd, entry_quad->pointc, entry_quad->pointa, color);
+                    }
+                    break;
+                }
                 default:
                     Console::ScriptConsole.debugf("INTERNAL TODO: all DrawEntry types (%s)", entry->class_name);
                     break;
@@ -343,6 +381,9 @@ int main(int argc, char** argv) {
     TaskScheduler::cleanup(L);
     rbxInstanceCleanup(L);
     lua_close(L);
+
+    for (auto& entry : DrawEntry::draw_list)
+        entry->free();
 
     curl_global_cleanup();
 
