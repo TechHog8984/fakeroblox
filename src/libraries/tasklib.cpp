@@ -272,7 +272,11 @@ std::optional<PreSpawnResult> preTaskSpawn(lua_State* L, const char* func_name, 
     int arg1 = 1 + arg_offset;
     luaL_checkany(L, arg1);
     int arg1_type = lua_type(L, arg1);
-    luaL_argcheck(L, arg1_type == LUA_TFUNCTION || arg1_type == LUA_TTHREAD, arg1, "expected function or thread");
+
+    constexpr int msg_size = 42;
+    char msg[msg_size];
+    snprintf(msg, msg_size, "expected function or thread, got %s", lua_typename(L, arg1_type));
+    luaL_argcheck(L, arg1_type == LUA_TFUNCTION || arg1_type == LUA_TTHREAD, arg1, msg);
 
     lua_State* thread;
     Task* task;
@@ -326,7 +330,7 @@ double getSeconds(lua_State* L, int arg = 1) {
     return seconds;
 }
 
-static int fakeroblox_task_wait(lua_State* L) {
+int fakeroblox_task_wait(lua_State* L) {
     Task* task = TaskScheduler::getTaskFromThread(L);
 
     double seconds = getSeconds(L);
@@ -339,7 +343,7 @@ static int fakeroblox_task_wait(lua_State* L) {
     return lua_yield(L, 0);
 }
 
-static int fakeroblox_task_spawn(lua_State* L) {
+int fakeroblox_task_spawn(lua_State* L) {
     auto result = preTaskSpawn(L, "spawn", 0);
     if (!result.has_value())
         return 0;
@@ -355,7 +359,7 @@ static int fakeroblox_task_spawn(lua_State* L) {
     return 1;
 }
 
-static int fakeroblox_task_defer(lua_State* L) {
+int fakeroblox_task_defer(lua_State* L) {
     auto result = preTaskSpawn(L, "defer", 0);
     if (!result.has_value())
         return 0;
@@ -371,7 +375,7 @@ static int fakeroblox_task_defer(lua_State* L) {
     return 1;
 }
 
-static int fakeroblox_task_delay(lua_State* L) {
+int fakeroblox_task_delay(lua_State* L) {
     auto result = preTaskSpawn(L, "delay", 1);
     if (!result.has_value())
         return 0;
@@ -390,7 +394,7 @@ static int fakeroblox_task_delay(lua_State* L) {
     return 1;
 }
 
-static int fakeroblox_task_cancel(lua_State* L) {
+int fakeroblox_task_cancel(lua_State* L) {
     luaL_checktype(L, 1, LUA_TTHREAD);
 
     lua_State* thread =lua_tothread(L, 1);
@@ -402,7 +406,7 @@ static int fakeroblox_task_cancel(lua_State* L) {
     return 0;
 }
 
-static int fakeroblox_task_status(lua_State* L) {
+int fakeroblox_task_status(lua_State* L) {
     luaL_checktype(L, 1, LUA_TTHREAD);
 
     lua_State* thread = lua_tothread(L, 1);
@@ -422,18 +426,12 @@ static int fakeroblox_task_status(lua_State* L) {
 void open_tasklib(lua_State *L) {
     lua_newtable(L);
 
-    lua_pushcfunction(L, fakeroblox_task_wait, "wait");
-    lua_setfield(L, -2, "wait");
-    lua_pushcfunction(L, fakeroblox_task_spawn, "spawn");
-    lua_setfield(L, -2, "spawn");
-    lua_pushcfunction(L, fakeroblox_task_defer, "defer");
-    lua_setfield(L, -2, "defer");
-    lua_pushcfunction(L, fakeroblox_task_delay, "delay");
-    lua_setfield(L, -2, "delay");
-    lua_pushcfunction(L, fakeroblox_task_cancel, "cancel");
-    lua_setfield(L, -2, "cancel");
-    lua_pushcfunction(L, fakeroblox_task_status, "status");
-    lua_setfield(L, -2, "status");
+    setfunctionfield(L, fakeroblox_task_spawn, "spawn", true);
+    setfunctionfield(L, fakeroblox_task_defer, "defer", true);
+    setfunctionfield(L, fakeroblox_task_delay, "delay", true);
+    setfunctionfield(L, fakeroblox_task_cancel, "cancel", true);
+    setfunctionfield(L, fakeroblox_task_status, "status", true);
+    setfunctionfield(L, fakeroblox_task_wait, "wait", true);
 
     lua_setglobal(L, "task");
 }

@@ -1,12 +1,15 @@
 #pragma once
 
-#include "lua.h"
+#include "classes/roblox/datatypes/rbxscriptsignal.hpp"
+
 #include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <variant>
 #include <vector>
+
+#include "lua.h"
 
 // Instance is the base class of all objects. We may adapt to Roblox's choice of an Object abstraction in the future.
 
@@ -43,6 +46,8 @@ class rbxClass {
 public:
     static std::map<std::string, std::shared_ptr<rbxClass>> class_map;
 
+    std::string name;
+
     enum Tags : uint8_t {
         NotCreatable = 1 << 0,
     };
@@ -51,6 +56,7 @@ public:
     std::shared_ptr<rbxClass> superclass;
     std::map<std::string, std::shared_ptr<rbxProperty>> properties;
     std::map<std::string, rbxMethod> methods;
+    std::vector<std::string> events;
 
     void newMethod(const char* name, lua_CFunction func, lua_Continuation cont = nullptr) {
         rbxMethod method;
@@ -68,6 +74,7 @@ public:
     std::shared_ptr<rbxClass> _class;
     std::map<std::string, rbxValue> values;
     std::map<std::string, rbxMethod> methods;
+    std::vector<std::string> events;
     std::vector<std::shared_ptr<rbxInstance>> children;
 
     bool destroyed = false;
@@ -80,6 +87,8 @@ public:
 
     template<class T>
     void setValue(std::string name, T value);
+
+    int pushEvent(lua_State* L, const char* name);
 
     void destroy(lua_State* L);
     std::shared_ptr<rbxInstance> findFirstChild(std::string name);
@@ -116,13 +125,13 @@ public:
 
 #define METHOD_INSTANCE_DESTROY "Destroy"
 
-std::shared_ptr<rbxInstance>& lua_checkinstance(lua_State* L, int narg);
-std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int narg);
+std::shared_ptr<rbxInstance>& lua_checkinstance(lua_State* L, int narg, const char* class_name = nullptr);
+std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int narg, const char* class_name = nullptr);
 
 void rbxInstanceSetup(lua_State* L, std::string api_jump);
 void rbxInstanceCleanup(lua_State* L);
 
-std::shared_ptr<rbxInstance> newInstance(const char* class_name);
+std::shared_ptr<rbxInstance> newInstance(lua_State* L, const char* class_name);
 int lua_pushinstance(lua_State* L, std::shared_ptr<rbxInstance> instance);
 
 namespace rbxInstance_datatype {

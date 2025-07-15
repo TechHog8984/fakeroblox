@@ -20,7 +20,7 @@ namespace fakeroblox {
         { .name = "can spawn lua function", .value = canSpawnLuaFunction },
         { .name = "can spawn C function", .value = canSpawnCFunction },
         { .name = "task.wait", .value = "local time_before = os.clock() \
-            local count = math.random(1, 12) / 10; \
+            local count = math.random(1, 8000) / 10000; \
             print('waiting for ' .. count .. ' seconds') \
             task.wait(count) \
             local elapsed = (os.clock() - time_before) \
@@ -29,7 +29,16 @@ namespace fakeroblox {
         },
         { .name = "instance cache", .value = "assert(game.Workspace == workspace) "},
         { .name = "instance method cache", .value = "assert(game.Destroy == workspace.Destroy)" },
-        { .name = "instance method route", .value = "assert(game.children == game.GetChildren)" }
+        { .name = "instance method route", .value = "assert(game.children == game.GetChildren)" },
+        { .name = "BindableEvent", .value = "local target = {} \
+            local upvalue\
+            local inst = Instance.new('BindableEvent') \
+            inst.Event:Connect(function(...) upvalue = ... end) \
+            assert(not upvalue) \
+            inst:Fire(target) \
+            task.wait(0.1) \
+            assert(upvalue == target) \
+        " }
     };
     constexpr int test_count = sizeof(test_list) / sizeof(test_list[0]);
 
@@ -38,7 +47,9 @@ namespace fakeroblox {
     #define PASS_ERROR "failed to start thread: " PASS
     const int pass_error_length = strlen(PASS_ERROR);
 
-    void runAllTests(lua_State* L, bool& is_running_tests) {
+    void runAllTests(lua_State* L, bool& is_running_tests, bool& all_tests_succeeded) {
+        all_tests_succeeded = false;
+
         std::vector<std::thread> thread_list;
         thread_list.reserve(test_count);
 
@@ -84,6 +95,7 @@ namespace fakeroblox {
         }
 
         Console::TestsConsole.debugf("All tests finished!");
+        all_tests_succeeded = !fail;
         if (fail)
             Console::TestsConsole.debug("There were test failures!");
         else {

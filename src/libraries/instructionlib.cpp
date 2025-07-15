@@ -1,5 +1,6 @@
 #include "libraries/instructionlib.hpp"
 
+#include "classes/roblox/datatypes/rbxscriptsignal.hpp"
 #include "common.hpp"
 #include "console.hpp"
 
@@ -129,6 +130,9 @@ int instruction__namecall(lua_State* L) {
 void open_instructionlib(lua_State *L) {
     // instruction global
     lua_newtable(L);
+
+    pushNewRbxScriptSignal(L, "stephook");
+    lua_setfield(L, -2, "stephook");
 
     lua_pushnumber(L, LOP_NOP);
     lua_setfield(L, -2, "LOP_NOP");
@@ -370,6 +374,11 @@ void open_instructionlib(lua_State *L) {
     lua_callbacks(L)->debugstep = stephook;
 }
 
+static int stephook_filter(lua_State* L) {
+    lua_pushboolean(L, lua_rawequal(L, 1, lua_upvalueindex(1)));
+    return 1;
+}
+
 void stephook(lua_State* L, lua_Debug* ar) {
     const Instruction* pc = L->ci->savedpc;
 
@@ -380,28 +389,28 @@ void stephook(lua_State* L, lua_Debug* ar) {
     }
     const Instruction insn = *--pc;
 
-    // FIXME: use a signal: instructionlib.stephook:Connect(function(...) end)
-    lua_getglobal(L, "debugstephook");
+    pushFunctionFromLookup(L, fireRbxScriptSignalWithFilter);
 
-    if (!lua_isnil(L, -1)) {
-        luaL_checktype(L, -1, LUA_TFUNCTION);
+    lua_getglobal(L, "instructionlib");
+    lua_getfield(L, -1, "stephook"); // signal
+    lua_remove(L, -2);
 
-        // stop recursion
-        if (this_cl == clvalue(L->top - 1))
-            return;
+    setclvalue(L, L->top, this_cl);
+    api_incr_top(L);
+    lua_pushcclosure(L, stephook_filter, "stephook_filter", 1);
 
-        InstructionWrapper* wrapper = static_cast<InstructionWrapper*>(lua_newuserdata(L, sizeof(InstructionWrapper)));
-        wrapper->insn = insn;
+    InstructionWrapper* wrapper = static_cast<InstructionWrapper*>(lua_newuserdata(L, sizeof(InstructionWrapper)));
+    wrapper->insn = insn;
 
-        luaL_getmetatable(L, "InstructionWrapper");
-        lua_setmetatable(L, -2);
+    luaL_getmetatable(L, "InstructionWrapper");
+    lua_setmetatable(L, -2);
 
-        setclvalue(L, L->top, this_cl);
-        api_incr_top(L);
-        lua_call(L, 2, 0);
+    setclvalue(L, L->top, this_cl);
+    api_incr_top(L);
 
-        *const_cast<Instruction*>(pc) = wrapper->insn;
-    }
+    lua_call(L, 4, 0);
+
+    *const_cast<Instruction*>(pc) = wrapper->insn;
 }
 
 }; // namespace fakeroblox

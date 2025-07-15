@@ -49,9 +49,11 @@ int pushFromLookup(lua_State* L, const char* lookup, void* ptr, std::function<vo
 
     return 1;
 }
-int pushFunctionFromLookup(lua_State* L, lua_CFunction func, std::string name, lua_Continuation cont) {
+
+int pushFunctionFromLookup(lua_State* L, lua_CFunction func, const char* name, lua_Continuation cont) {
     return pushFromLookup(L, METHODLOOKUP, reinterpret_cast<void*>(func), [&L, func, name, cont] {
-        const char* namecstr = getFromStringLookup(L, addToStringLookup(L, name));
+        const char* namecstr = name == nullptr ? nullptr : getFromStringLookup(L, addToStringLookup(L, name));
+
         if (cont)
             lua_pushcclosurek(L, func, namecstr, 0, cont);
         else
@@ -59,16 +61,16 @@ int pushFunctionFromLookup(lua_State* L, lua_CFunction func, std::string name, l
     });
 }
 
-int addToStringLookup(lua_State *L, std::string string) {
-    lua_getfield(L, LUA_REGISTRYINDEX, STRINGLOOKUP);
-    lua_pushlstring(L, string.c_str(), string.size());
+int addToLookup(lua_State *L, const char* lookup, std::function<void()> pushValue) {
+    lua_getfield(L, LUA_REGISTRYINDEX, lookup);
+    pushValue();
 
     lua_getglobal(L, "table");
     lua_getfield(L, -1, "find");
     lua_remove(L, -2); // table
 
-    lua_pushvalue(L, -3); // stringlookup
-    lua_pushvalue(L, -3); // string
+    lua_pushvalue(L, -3); // lookup
+    lua_pushvalue(L, -3); // value
 
     lua_call(L, 2, 1);
 
@@ -77,11 +79,17 @@ int addToStringLookup(lua_State *L, std::string string) {
     lua_pop(L, 1); // table.find result
 
     if (!cached)
-        lua_rawseti(L, -2, index); // stringlookup[index] = string
+        lua_rawseti(L, -2, index); // lookup[index] = value
 
-    lua_pop(L, 1 + cached); // stringlookup and string (if cached)
+    lua_pop(L, 1 + cached); // lookup and value (if cached)
 
     return index;
+}
+
+int addToStringLookup(lua_State *L, std::string string) {
+    return addToLookup(L, STRINGLOOKUP, [&L, &string]{
+        lua_pushlstring(L, string.c_str(), string.size());
+    });
 }
 const char* getFromStringLookup(lua_State *L, int index) {
     lua_getfield(L, LUA_REGISTRYINDEX, STRINGLOOKUP);
@@ -93,7 +101,7 @@ const char* getFromStringLookup(lua_State *L, int index) {
     return str;
 }
 
-int log(lua_State* L, Console::Message::Type type) {
+std::string getStackMessage(lua_State* L) {
     std::string message;
     int n = lua_gettop(L);
     for (int i = 0; i < n; i++) {
@@ -104,7 +112,11 @@ int log(lua_State* L, Console::Message::Type type) {
         message.append(s, l);
         lua_pop(L, 1);
     }
-    TaskScheduler::getTaskFromThread(L)->console->log(message, type);
+    return message;
+}
+
+int log(lua_State* L, Console::Message::Type type) {
+    TaskScheduler::getTaskFromThread(L)->console->log(getStackMessage(L), type);
     return 0;
 }
 // these functions are exposed in environment.cpp
@@ -115,14 +127,17 @@ int fr_warn(lua_State* L) {
     return log(L, Console::Message::WARNING);
 }
 
-void setfunctionfield(lua_State *L, lua_CFunction func, const char *method, bool lookup) {
+void setfunctionfield(lua_State *L, lua_CFunction func, const char *method, const char* debugname, bool lookup) {
     assert(lua_istable(L, -1));
 
     if (lookup)
-        pushFunctionFromLookup(L, func, method);
+        pushFunctionFromLookup(L, func, debugname);
     else
-        lua_pushcfunction(L, func, method);
+        lua_pushcfunction(L, func, debugname);
     lua_setfield(L, -2, method);
+}
+void setfunctionfield(lua_State *L, lua_CFunction func, const char *method, bool lookup) {
+    setfunctionfield(L, func, method, nullptr, lookup);
 }
 
 }; // namespace fakeroblox

@@ -20,7 +20,6 @@
 #include "classes/vector2.hpp"
 #include "libraries/tasklib.hpp"
 #include "libraries/instructionlib.hpp"
-#include "libraries/signallib.hpp"
 
 #include "lua.h"
 #include "lualib.h"
@@ -110,13 +109,13 @@ int main(int argc, char** argv) {
     open_fakeroblox_environment(L);
 
     open_tasklib(L);
-    open_instructionlib(L);
     open_vector2lib(L);
     open_color3lib(L);
     open_drawentrylib(L);
-    setup_signallib(L);
 
     rbxInstanceSetup(L, api_dump);
+
+    open_instructionlib(L); // needs to happen after rbxInstance setup
 
     lua_newtable(L);
     lua_setglobal(L, "shared");
@@ -137,6 +136,8 @@ int main(int argc, char** argv) {
     bool menu_tests_open = false;
     bool menu_thread_list_open = false;
 
+    bool all_tests_succeeded = false;
+    bool has_tested = false;
     bool is_running_tests = false;
     bool should_run_tests = false;
 
@@ -325,10 +326,18 @@ int main(int argc, char** argv) {
             if (ImGui::Begin("Tests", &menu_tests_open)) {
                 if (is_running_tests)
                     ImGui::Text("Running tests...");
-                else if (ImGui::Button("Run all tests")) {
-                    is_running_tests = true;
-                    should_run_tests = true;
-                    Console::TestsConsole.clear();
+                else {
+                    if (ImGui::Button("Run all tests")) {
+                        has_tested = true;
+                        is_running_tests = true;
+                        should_run_tests = true;
+                        Console::TestsConsole.clear();
+                    } else if (has_tested) {
+                        if (all_tests_succeeded)
+                            ImGui::TextColored({0.4, 1, 0.4, 1}, "All tests succeeded!");
+                        else
+                            ImGui::TextColored({1, 0.4, 0.4, 1}, "Some tests failed!");
+                    }
                 }
 
                 ImGui::BeginChild("ScrollableRegion", ImGui::GetContentRegionAvail(), 0,  ImGuiWindowFlags_HorizontalScrollbar);
@@ -369,8 +378,8 @@ int main(int argc, char** argv) {
 
         if (should_run_tests) {
             should_run_tests = false;
-            std::thread([&L, &is_running_tests]{
-                runAllTests(L, is_running_tests);
+            std::thread([&L, &is_running_tests, &all_tests_succeeded]{
+                runAllTests(L, is_running_tests, all_tests_succeeded);
             }).detach();
         }
     }

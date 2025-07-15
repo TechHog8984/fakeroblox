@@ -78,6 +78,13 @@ public:
 
 void open_tasklib(lua_State* L);
 
+int fakeroblox_task_spawn(lua_State* L);
+int fakeroblox_task_defer(lua_State* L);
+int fakeroblox_task_delay(lua_State* L);
+int fakeroblox_task_cancel(lua_State* L);
+int fakeroblox_task_status(lua_State* L);
+int fakeroblox_task_wait(lua_State* L);
+
 std::optional<std::string> tryCreateThreadAndSpawnFunction(lua_State* L, Feedback feedback, Console* console = nullptr);
 std::optional<std::string> tryRunCode(lua_State* L, const char* chunk_name, const char* source, Feedback feedback, OnKill on_kill = nullptr, Console* console = nullptr);
 

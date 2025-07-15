@@ -1,8 +1,17 @@
 #include "classes/roblox/instance.hpp"
+#include "classes/roblox/bindableevent.hpp"
 #include "classes/roblox/datamodel.hpp"
+#include "classes/roblox/datatypes/rbxscriptsignal.hpp"
+
 #include "common.hpp"
+
+#include "lobject.h"
 #include "lua.h"
 #include "lualib.h"
+#include "lstate.h"
+
+#include <cstdio>
+#include <cstdlib>
 #include <map>
 
 namespace fakeroblox {
@@ -28,13 +37,31 @@ void rbxInstance::setValue(std::string name, T value) {
     std::get<T>(values.at(name).value) = value;
 }
 
+int rbxInstance::pushEvent(lua_State* L, const char* name) {
+    lua_getfield(L, LUA_REGISTRYINDEX, SIGNALLOOKUP);
+    lua_pushlightuserdata(L, this);
+    lua_rawget(L, -2);
+    lua_pushstring(L, name);
+    lua_rawget(L, -2);
+
+    lua_remove(L, -2); // remove signallookup
+    lua_remove(L, -2); // remove signallookup table
+    return 1;
+}
+
 void rbxInstance::destroy(lua_State* L) {
     if (destroyed)
         return;
 
-    // FIXME: full destroy behavior (connections disconnected, etc)
+    // FIXME: full destroy behavior (consult docs)
     for (auto& child : children)
         child->destroy(L);
+    for (auto& event : events) {
+        pushEvent(L, event.c_str());
+        rbxScriptSignal* signal = lua_checkrbxscriptsignal(L, -1);
+        lua_pop(L, 1);
+        signal->~rbxScriptSignal();
+    }
 
     lua_pushnil(L);
     lua_setfield(L, 1, PROP_INSTANCE_PARENT);
@@ -53,19 +80,49 @@ std::shared_ptr<rbxInstance> rbxInstance::findFirstChild(std::string name) {
     return nullptr;
 }
 
-std::shared_ptr<rbxInstance>& lua_checkinstance(lua_State* L, int narg) {
+std::shared_ptr<rbxInstance>& lua_checkinstance(lua_State* L, int narg, const char* class_name) {
     void* ud = luaL_checkudata(L, narg, "Instance");
+    auto instance = static_cast<std::shared_ptr<rbxInstance>*>(ud);
 
+    if (class_name) {
+        bool valid_class = false;
+        rbxClass* c = (*instance)->_class.get();
+        while (c) {
+            if (strequal(c->name.c_str(), class_name)) {
+                valid_class = true;
+                break;
+            }
+            c = c->superclass.get();
+        }
+
+        Closure* cl = L->ci > L->base_ci ? curr_func(L) : NULL;
+        assert(cl);
+        assert(cl->isC);
+        const char* debugname = cl->c.debugname + 0;
+
+        if (!valid_class) {
+            const char* fmt = "Expected ':' not '.' calling member function %s";
+            int size = snprintf(NULL, 0, fmt, debugname);
+            char* msg = static_cast<char*>(malloc(size));
+            snprintf(msg, size + 1, fmt, debugname);
+
+            lua_pushlstring(L, msg, size);
+            free(msg);
+            lua_error(L);
+        }
+    }
+
+    // FIXME: this is ugly (duplicate code); I think the solution is moving to weak_ptr instead of shared_ptr reference
     return *static_cast<std::shared_ptr<rbxInstance>*>(ud);
 }
-std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int narg) {
+std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int narg, const char* class_name) {
     if (lua_gettop(L) < narg)
         return nullptr;
 
     if (lua_type(L, narg) == LUA_TNIL)
         return nullptr;
 
-    return lua_checkinstance(L, narg);
+    return lua_checkinstance(L, narg, class_name);
 }
 
 namespace rbxInstance_methods {
@@ -133,7 +190,7 @@ int pushMethod(lua_State* L, std::shared_ptr<rbxInstance>& instance, std::string
     assert(!method.route);
 
     if (method.func)
-        return pushFunctionFromLookup(L, method.func, method.name, method.cont);
+        return pushFunctionFromLookup(L, method.func, method.name.c_str(), method.cont);
     else
         luaL_error(L, "INTERNAL ERROR: TODO implement '%s'", method.name.c_str());
 
@@ -148,6 +205,8 @@ int rbxInstance__index(lua_State* L) {
     if (instance->values.find(key) == instance->values.end()) {
         if (instance->methods.find(key) != instance->methods.end())
             return pushMethod(L, instance, key);
+        if (std::find(instance->events.begin(), instance->events.end(), key) != instance->events.end())
+            return instance->pushEvent(L, key);
 
         auto child = instance->findFirstChild(key);
         if (child) {
@@ -298,24 +357,44 @@ int rbxInstance__namecall(lua_State* L) {
         luaL_error(L, "%s is not a valid member of %s \"%s\"", namecall, class_name.c_str(), name.c_str());
     }
 
-    return instance->methods[method_name].func(L);
+    lua_CFunction func = instance->methods[method_name].func;
+    if (func)
+        return instance->methods[method_name].func(L);
+    else
+        luaL_error(L, "INTERNAL ERROR: TODO implement '%s'", method_name.c_str());
 }
 
 void rbxInstance__dtor(lua_State* L, std::shared_ptr<rbxInstance> ptr) {
     ptr.reset();
 }
 
-std::shared_ptr<rbxInstance> newInstance(const char* class_name) {
+std::shared_ptr<rbxInstance> newInstance(lua_State* L, const char* class_name) {
     std::shared_ptr<rbxClass> _class = rbxClass::class_map[class_name];
     std::shared_ptr<rbxInstance> instance = std::make_shared<rbxInstance>(_class);
+
+    lua_newtable(L);
+
+    lua_getfield(L, LUA_REGISTRYINDEX, SIGNALLOOKUP);
+    lua_pushlightuserdata(L, instance.get());
+    lua_pushvalue(L, -3);
+    lua_rawset(L, -3);
+
+    lua_pop(L, 1);
 
     rbxClass* c = _class.get();
     while (c) {
         for (auto& property : c->properties)
             instance->values[property.first] = property.second->default_value;
         instance->methods.insert(c->methods.begin(), c->methods.end());
+        instance->events.insert(instance->events.end(), c->events.begin(), c->events.end());
+        for (auto& event : c->events) {
+            lua_pushstring(L, event.c_str());
+            pushNewRbxScriptSignal(L, event);
+            lua_rawset(L, -3);
+        }
         c = c->superclass.get();
     }
+    lua_pop(L, 1); // signallookup table
 
     // FIXME: default values (things like archivable)
     // FIXME: unique_id
@@ -356,7 +435,7 @@ namespace rbxInstance_datatype {
         if (_class->tags & rbxClass::NotCreatable)
             luaL_error(L, "Unable to create an Instance of type \"%s\"", class_name);
 
-        std::shared_ptr<rbxInstance> instance = newInstance(class_name);
+        std::shared_ptr<rbxInstance> instance = newInstance(L, class_name);
         lua_pushinstance(L, instance);
 
         if (parent) {
@@ -369,6 +448,12 @@ namespace rbxInstance_datatype {
 }; // namespace rbxInstance_datatype
 
 void rbxInstanceSetup(lua_State* L, std::string api_dump) {
+    // instancelookup
+    newweaktable(L);
+    lua_setfield(L, LUA_REGISTRYINDEX, INSTANCELOOKUP);
+
+    setup_rbxscriptsignal(L);
+
     json api_json = json::parse(api_dump);
     valid_class_names.reserve(api_json["Classes"].size());
 
@@ -379,6 +464,8 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
         valid_class_names.push_back(class_name);
 
         std::shared_ptr<rbxClass> _class = std::make_shared<rbxClass>();
+        _class->name.assign(class_name);
+
         auto& superclass_json = class_json["Superclass"];
         if (superclass_json.type() == json::value_t::string)
             superclass_map.try_emplace(class_name, superclass_json.template get<std::string>());
@@ -452,6 +539,8 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
                     }
                 }
                 _class->methods.try_emplace(member_name, method);
+            } else if (member_type == "Event") {
+                _class->events.push_back(member_name);
             }
         }
 
@@ -469,14 +558,15 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
     rbxClass::class_map["Instance"]->methods.at("GetFullName").func = rbxInstance_methods::getFullName;
 
     rbxInstance_DataModel_init(L);
+    rbxInstance_BindableEvent_init();
 
     // metatable
     luaL_newmetatable(L, "Instance");
 
-    setfunctionfield(L, rbxInstance__tostring, "__tostring");
-    setfunctionfield(L, rbxInstance__index, "__index");
-    setfunctionfield(L, rbxInstance__newindex, "__newindex");
-    setfunctionfield(L, rbxInstance__namecall, "__namecall");
+    setfunctionfield(L, rbxInstance__tostring, "__tostring", nullptr);
+    setfunctionfield(L, rbxInstance__index, "__index", nullptr);
+    setfunctionfield(L, rbxInstance__newindex, "__newindex", nullptr);
+    setfunctionfield(L, rbxInstance__namecall, "__namecall", nullptr);
 
     lua_pop(L, 1);
 
@@ -488,19 +578,15 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
 
     lua_setglobal(L, "Instance");
 
-    // instancelookup
-    newweaktable(L);
-    lua_setfield(L, LUA_REGISTRYINDEX, INSTANCELOOKUP);
-
     lua_setuserdatadtor(L, LUA_TAG_RBXINSTANCE, (lua_Destructor) rbxInstance__dtor);
 
-    auto datamodel = newInstance("DataModel");
+    auto datamodel = newInstance(L, "DataModel");
     datamodel->setValue<std::string>(PROP_INSTANCE_NAME, "FakeRoblox");
 
     lua_pushinstance(L, datamodel);
     lua_setglobal(L, "game");
 
-    auto workspace = newInstance("Workspace");
+    auto workspace = newInstance(L, "Workspace");
     lua_pushinstance(L, workspace);
     lua_pushinstance(L, datamodel);
     lua_setfield(L, -2, PROP_INSTANCE_PARENT);

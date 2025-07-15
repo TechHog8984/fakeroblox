@@ -11,6 +11,7 @@ namespace fakeroblox {
 namespace rbxInstance_DataModel_methods {
     static int httpGet(lua_State* L) {
         // FIXME: yield!
+        lua_checkinstance(L, 1, "DataModel");
         const char* url = luaL_checkstring(L, 2);
 
         struct MemoryStruct chunk;
