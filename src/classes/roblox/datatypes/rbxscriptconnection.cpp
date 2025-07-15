@@ -53,6 +53,13 @@ lua_CFunction getrbxScriptConnectionMethod(const char* key) {
     return nullptr;
 }
 
+static int rbxScriptConnection__tostring(lua_State* L) {
+    lua_checkrbxscriptconnection(L, 1);
+
+    lua_pushstring(L, "Connection");
+    return 1;
+}
+
 static int rbxScriptConnection__index(lua_State* L) {
     lua_checkrbxscriptconnection(L, 1);
     const char* key = lua_tostring(L, 2);
@@ -79,6 +86,7 @@ static int rbxScriptConnection__namecall(lua_State* L) {
 void setup_rbxscriptconnection(lua_State *L) {
     luaL_newmetatable(L, "RbxScriptConnection");
 
+    setfunctionfield(L, rbxScriptConnection__tostring, "__tostring", nullptr);
     setfunctionfield(L, rbxScriptConnection__index, "__index", nullptr);
     // TODO: __newindex that errors 'readonly'
     setfunctionfield(L, rbxScriptConnection__namecall, "__namecall", nullptr);

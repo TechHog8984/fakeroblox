@@ -71,6 +71,13 @@ lua_CFunction getrbxScriptSignalMethod(const char* key) {
     return nullptr;
 }
 
+static int rbxScriptSignal__tostring(lua_State* L) {
+    rbxScriptSignal* signal = lua_checkrbxscriptsignal(L, 1);
+
+    lua_pushfstringL(L, "Signal %s", signal->name.c_str());
+    return 1;
+}
+
 static int rbxScriptSignal__index(lua_State* L) {
     lua_checkrbxscriptsignal(L, 1);
     const char* key = lua_tostring(L, 2);
@@ -168,6 +175,7 @@ void setup_rbxscriptsignal(lua_State *L) {
     // metatable
     luaL_newmetatable(L, "RbxScriptSignal");
 
+    setfunctionfield(L, rbxScriptSignal__tostring, "__tostring", nullptr);
     setfunctionfield(L, rbxScriptSignal__index, "__index", nullptr);
     // TODO: __newindex that errors 'readonly'
     setfunctionfield(L, rbxScriptSignal__namecall, "__namecall", nullptr);
