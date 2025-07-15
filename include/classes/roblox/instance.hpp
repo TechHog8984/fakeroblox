@@ -2,6 +2,7 @@
 
 #include "classes/roblox/datatypes/rbxscriptsignal.hpp"
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
@@ -42,9 +43,13 @@ struct rbxMethod {
     lua_Continuation cont = nullptr;
 };
 
+class rbxInstance;
+
 class rbxClass {
 public:
     static std::map<std::string, std::shared_ptr<rbxClass>> class_map;
+    static std::vector<std::string> valid_class_names;
+    static std::vector<std::string> valid_services;
 
     std::string name;
 
@@ -57,6 +62,8 @@ public:
     std::map<std::string, std::shared_ptr<rbxProperty>> properties;
     std::map<std::string, rbxMethod> methods;
     std::vector<std::string> events;
+    std::function<void(std::shared_ptr<rbxInstance>)> constructor = nullptr;
+    std::function<void(std::shared_ptr<rbxInstance>)> destructor = nullptr;
 
     void newMethod(const char* name, lua_CFunction func, lua_Continuation cont = nullptr) {
         rbxMethod method;
@@ -78,6 +85,7 @@ public:
     std::vector<std::shared_ptr<rbxInstance>> children;
 
     bool destroyed = false;
+    void* userdata = nullptr;
 
     rbxInstance(std::shared_ptr<rbxClass> _class);
     ~rbxInstance();

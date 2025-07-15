@@ -18,8 +18,9 @@ namespace fakeroblox {
 
 #define LUA_TAG_RBXINSTANCE 1
 
-static std::vector<std::string> valid_class_names;
 std::map<std::string, std::shared_ptr<rbxClass>> rbxClass::class_map;
+std::vector<std::string> rbxClass::valid_class_names;
+std::vector<std::string> rbxClass::valid_services;
 
 rbxInstance::rbxInstance(std::shared_ptr<rbxClass> _class) : _class(_class) {}
 
@@ -364,8 +365,15 @@ int rbxInstance__namecall(lua_State* L) {
         luaL_error(L, "INTERNAL ERROR: TODO implement '%s'", method_name.c_str());
 }
 
-void rbxInstance__dtor(lua_State* L, std::shared_ptr<rbxInstance> ptr) {
-    ptr.reset();
+void rbxInstance__dtor(lua_State* L, std::shared_ptr<rbxInstance> instance) {
+    rbxClass* c = instance->_class.get();
+    while (c) {
+        if (c->destructor)
+            c->destructor(instance);
+        c = c->superclass.get();
+    }
+
+    instance.reset();
 }
 
 std::shared_ptr<rbxInstance> newInstance(lua_State* L, const char* class_name) {
@@ -392,6 +400,8 @@ std::shared_ptr<rbxInstance> newInstance(lua_State* L, const char* class_name) {
             pushNewRbxScriptSignal(L, event);
             lua_rawset(L, -3);
         }
+        if (c->constructor)
+            c->constructor(instance);
         c = c->superclass.get();
     }
     lua_pop(L, 1); // signallookup table
@@ -455,13 +465,13 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
     setup_rbxscriptsignal(L);
 
     json api_json = json::parse(api_dump);
-    valid_class_names.reserve(api_json["Classes"].size());
+    rbxClass::valid_class_names.reserve(api_json["Classes"].size());
 
     std::map<std::string, std::string> superclass_map;
 
     for (auto& class_json : api_json["Classes"]) {
         std::string class_name = class_json["Name"].template get<std::string>();
-        valid_class_names.push_back(class_name);
+        rbxClass::valid_class_names.push_back(class_name);
 
         std::shared_ptr<rbxClass> _class = std::make_shared<rbxClass>();
         _class->name.assign(class_name);
@@ -475,6 +485,8 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
                 std::string tag = tag_json.template get<std::string>();
                 if (tag == "NotCreatable")
                     _class->tags |= rbxClass::NotCreatable;
+                else if (tag == "Service")
+                    rbxClass::valid_services.push_back(class_name);
             }
         }
 
