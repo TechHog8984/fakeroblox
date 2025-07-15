@@ -72,6 +72,17 @@ public:
     void updateOutline();
 };
 
+class DrawEntryCircle : public DrawEntry {
+public:
+    double thickness = 1;
+    int num_sides = 0;
+    double radius = 0;
+    bool filled = true;
+    Vector2 center{0, 0};
+
+    DrawEntryCircle();
+};
+
 class DrawEntrySquare : public DrawEntry {
 public:
     double thickness = 1;

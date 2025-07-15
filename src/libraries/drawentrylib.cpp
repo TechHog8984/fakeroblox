@@ -13,6 +13,7 @@ std::vector<DrawEntry*> DrawEntry::draw_list;
 DrawEntry::DrawEntry(Type type, const char* class_name) : type(type), class_name(class_name) {}
 DrawEntryLine::DrawEntryLine() : DrawEntry(DrawEntry::Line, "Line") {}
 DrawEntryText::DrawEntryText() : DrawEntry(DrawEntry::Text, "Text") {}
+DrawEntryCircle::DrawEntryCircle() : DrawEntry(DrawEntry::Circle, "Circle") {}
 DrawEntrySquare::DrawEntrySquare() : DrawEntry(DrawEntry::Square, "Square") {}
 DrawEntryTriangle::DrawEntryTriangle() : DrawEntry(DrawEntry::Triangle, "Triangle") {}
 DrawEntryQuad::DrawEntryQuad() : DrawEntry(DrawEntry::Quad, "Quad") {}
@@ -36,7 +37,6 @@ void DrawEntryText::updateFont() {
 
 // FIXME: text outline
 // const float OUTLINE_OFFSET = 2;
-
 void DrawEntryText::updateOutline() {
     // outline_position = Vector2{ position.x + OUTLINE_OFFSET / 2, position.y + OUTLINE_OFFSET / 2 };
     // outline_text_size = text_size + OUTLINE_OFFSET;
@@ -45,27 +45,29 @@ void DrawEntryText::updateOutline() {
     // outline_text_size = text_size + 1;
 }
 
+#define DrawEntry_free_case(type) case DrawEntry::type:       \
+    static_cast<DrawEntry##type*>(this)->~DrawEntry##type();  \
+    break;                                                    \
+
 void DrawEntry::free() {
     switch (this->type) {
-        case DrawEntry::Line:
-            static_cast<DrawEntryLine*>(this)->~DrawEntryLine();
-            break;
-        case DrawEntry::Text:
-            static_cast<DrawEntryText*>(this)->~DrawEntryText();
-            break;
-        case DrawEntry::Square:
-            static_cast<DrawEntrySquare*>(this)->~DrawEntrySquare();
-            break;
-        case DrawEntry::Triangle:
-            static_cast<DrawEntryTriangle*>(this)->~DrawEntryTriangle();
-            break;
-        case DrawEntry::Quad:
-            static_cast<DrawEntryQuad*>(this)->~DrawEntryQuad();
-            break;
+        DrawEntry_free_case(Line)
+        DrawEntry_free_case(Text)
+        DrawEntry_free_case(Circle)
+        DrawEntry_free_case(Square)
+        DrawEntry_free_case(Triangle)
+        DrawEntry_free_case(Quad)
         default:
             assert(!"TODO: all DrawEntry types in free");
             break;
     }
+}
+
+#undef DrawEntry_free_case
+
+#define DrawEntry_new_branch(type) if (strequal(class_name, #type)) { \
+    ud = lua_newuserdata(L, sizeof(DrawEntry##type)); \
+    new(ud) DrawEntry##type(); \
 }
 
 static int DrawEntry_new(lua_State* L) {
@@ -73,22 +75,13 @@ static int DrawEntry_new(lua_State* L) {
 
     void* ud = nullptr;
     // FIXME: all DrawEntry types
-    if (strequal(class_name, "Line")) {
-        ud = lua_newuserdata(L, sizeof(DrawEntryLine));
-        new(ud) DrawEntryLine();
-    } else if (strequal(class_name, "Text")) {
-        ud = lua_newuserdata(L, sizeof(DrawEntryText));
-        new(ud) DrawEntryText();
-    } else if (strequal(class_name, "Square")) {
-        ud = lua_newuserdata(L, sizeof(DrawEntrySquare));
-        new(ud) DrawEntrySquare();
-    } else if (strequal(class_name, "Triangle")) {
-        ud = lua_newuserdata(L, sizeof(DrawEntryTriangle));
-        new(ud) DrawEntryTriangle();
-    } else if (strequal(class_name, "Quad")) {
-        ud = lua_newuserdata(L, sizeof(DrawEntryQuad));
-        new(ud) DrawEntryQuad();
-    } else
+    DrawEntry_new_branch(Line)
+    else DrawEntry_new_branch(Text)
+    else DrawEntry_new_branch(Circle)
+    else DrawEntry_new_branch(Square)
+    else DrawEntry_new_branch(Triangle)
+    else DrawEntry_new_branch(Quad)
+    else
         luaL_error(L, "invalid DrawEntry class name '%s'", class_name);
 
     assert(ud);
@@ -104,6 +97,8 @@ static int DrawEntry_new(lua_State* L) {
 
     return 1;
 }
+
+#undef DrawEntry_new_branch
 
 namespace DrawEntry_methods {
     static int remove(lua_State* L) {
@@ -188,6 +183,23 @@ static int DrawEntry__index(lua_State* L) {
                     pushColor3(L, entry_text->outline_color);
                 else if (strequal(key, "Position"))
                     pushVector2(L, entry_text->position);
+                else
+                    goto INVALID;
+
+                break;
+            }
+            case DrawEntry::Circle: {
+                DrawEntryCircle* entry_circle = static_cast<DrawEntryCircle*>(entry);
+                if (strequal(key, "Thickness"))
+                    lua_pushnumber(L, entry_circle->thickness);
+                else if (strequal(key, "NumSides"))
+                    lua_pushnumber(L, entry_circle->num_sides);
+                else if (strequal(key, "Radius"))
+                    lua_pushnumber(L, entry_circle->radius);
+                else if (strequal(key, "Filled"))
+                    lua_pushboolean(L, entry_circle->filled);
+                else if (strequal(key, "Center") || strequal(key, "Position"))
+                    pushVector2(L, entry_circle->center);
                 else
                     goto INVALID;
 
@@ -317,6 +329,23 @@ static int DrawEntry__newindex(lua_State* L) {
                     entry_text->position = *lua_checkvector2(L, 3);
                     entry_text->updateOutline();
                 } else
+                    goto INVALID;
+
+                break;
+            }
+            case DrawEntry::Circle: {
+                DrawEntryCircle* entry_circle = static_cast<DrawEntryCircle*>(entry);
+                if (strequal(key, "Thickness"))
+                    entry_circle->thickness = luaL_checknumber(L, 3);
+                else if (strequal(key, "NumSides"))
+                    entry_circle->num_sides = luaL_checknumber(L, 3);
+                else if (strequal(key, "Radius"))
+                    entry_circle->radius = luaL_checknumber(L, 3);
+                else if (strequal(key, "Filled"))
+                    entry_circle->filled = luaL_checkboolean(L, 3);
+                else if (strequal(key, "Center") || strequal(key, "Position"))
+                    entry_circle->center = *lua_checkvector2(L, 3);
+                else
                     goto INVALID;
 
                 break;

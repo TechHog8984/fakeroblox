@@ -170,6 +170,19 @@ int main(int argc, char** argv) {
                     DrawTextEx(entry_text->font, entry_text->text.c_str(), entry_text->position, entry_text->text_size, 0, color);
                     break;
                 }
+                case DrawEntry::Circle: {
+                    DrawEntryCircle* entry_circle = static_cast<DrawEntryCircle*>(entry);
+                    if (entry_circle->num_sides) {
+                        DrawPolyLines(entry_circle->center, entry_circle->num_sides, entry_circle->radius, 0, color);
+                        if (entry_circle->filled)
+                            DrawPoly(entry_circle->center, entry_circle->num_sides, entry_circle->radius, 0, color);
+                    } else {
+                        DrawCircleLinesV(entry_circle->center, entry_circle->radius, color);
+                        if (entry_circle->filled)
+                            DrawCircleV(entry_circle->center, entry_circle->radius, color);
+                    }
+                    break;
+                }
                 case DrawEntry::Square: {
                     DrawEntrySquare* entry_square = static_cast<DrawEntrySquare*>(entry);
                     DrawRectangleLinesEx(entry_square->rect, entry_square->thickness, color);
