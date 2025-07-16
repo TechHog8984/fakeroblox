@@ -31,16 +31,17 @@ int newweaktable(lua_State* L) {
 
     return 1;
 }
-int pushFromLookup(lua_State* L, const char* lookup, void* ptr, std::function<void()> pushValue) {
+// TODO: only call pushKey once (use pushvalue)
+int pushFromLookup(lua_State* L, const char* lookup, std::function<void()> pushKey, std::function<void()> pushValue) {
     lua_getfield(L, LUA_REGISTRYINDEX, lookup);
-    lua_pushlightuserdata(L, ptr);
+    pushKey();
     lua_rawget(L, -2);
 
     if (lua_isnil(L, -1)) {
         lua_pop(L, 1);
         pushValue();
 
-        lua_pushlightuserdata(L, ptr);
+        pushKey();
         lua_pushvalue(L, -2);
         lua_rawset(L, -4);
     }
@@ -48,6 +49,9 @@ int pushFromLookup(lua_State* L, const char* lookup, void* ptr, std::function<vo
     lua_remove(L, -2);
 
     return 1;
+}
+int pushFromLookup(lua_State* L, const char* lookup, void* ptr, std::function<void()> pushValue) {
+    return pushFromLookup(L, lookup, [&L, &ptr] { lua_pushlightuserdata(L, ptr); }, pushValue);
 }
 
 int pushFunctionFromLookup(lua_State* L, lua_CFunction func, const char* name, lua_Continuation cont) {
@@ -61,8 +65,7 @@ int pushFunctionFromLookup(lua_State* L, lua_CFunction func, const char* name, l
     });
 }
 
-int addToLookup(lua_State *L, const char* lookup, std::function<void()> pushValue) {
-    lua_getfield(L, LUA_REGISTRYINDEX, lookup);
+int addToLookup(lua_State *L, std::function<void()> pushValue, bool keep_value) {
     pushValue();
 
     lua_getglobal(L, "table");
@@ -78,16 +81,23 @@ int addToLookup(lua_State *L, const char* lookup, std::function<void()> pushValu
     int index = cached ? lua_tonumber(L, -1) : lua_objlen(L, -3) + 1;
     lua_pop(L, 1); // table.find result
 
-    if (!cached)
-        lua_rawseti(L, -2, index); // lookup[index] = value
+    if (cached) {
+        if (!keep_value)
+            lua_pop(L, 1);
+    } else {
+        if (keep_value)
+            lua_pushvalue(L, -1);
+        lua_rawseti(L, -2 - keep_value, index); // lookup[index] = value
+    }
 
-    lua_pop(L, 1 + cached); // lookup and value (if cached)
+    lua_remove(L, -1 - keep_value); // pop lookup
 
     return index;
 }
 
 int addToStringLookup(lua_State *L, std::string string) {
-    return addToLookup(L, STRINGLOOKUP, [&L, &string]{
+    lua_getfield(L, LUA_REGISTRYINDEX, STRINGLOOKUP);
+    return addToLookup(L, [&L, &string]{
         lua_pushlstring(L, string.c_str(), string.size());
     });
 }

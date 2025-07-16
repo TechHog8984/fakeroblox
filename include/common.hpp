@@ -13,6 +13,10 @@ namespace fakeroblox {
 
 #define strequal(str1, str2) (strcmp(str1, str2) == 0)
 
+#define LUA_TAG_RBXINSTANCE 1
+#define LUA_TAG_ENUM 2
+#define LUA_TAG_ENUMITEM 3
+
 using Feedback = std::function<void(std::string)>;
 using OnKill = std::function<void()>;
 
@@ -21,16 +25,19 @@ double luaL_optnumberrange(lua_State* L, int narg, double min, double max, doubl
 
 int newweaktable(lua_State* L);
 
+int pushFromLookup(lua_State* L, const char* lookup, std::function<void()> pushKey, std::function<void()> pushValue);
 int pushFromLookup(lua_State* L, const char* lookup, void* ptr, std::function<void()> pushValue);
 
 int pushFunctionFromLookup(lua_State* L, lua_CFunction func, const char* name = nullptr, lua_Continuation cont = nullptr);
-int addToLookup(lua_State *L, const char* lookup, std::function<void()> pushValue);
+// push lookup, call addToLookup, lookup is popped by addToLookup
+int addToLookup(lua_State *L, std::function<void()> pushValue, bool keep_value = false);
 
 #define INSTANCELOOKUP "instancelookup"
 #define METHODLOOKUP "methodlookup"
 #define STRINGLOOKUP "stringlookup"
 #define SIGNALLOOKUP "signallookup"
 #define SIGNALCONNECTIONLISTLOOKUP "signalconnectionlistlookup"
+#define ENUMLOOKUP "enumlookup"
 
 // TODO: we should probably not use std::string here
 int addToStringLookup(lua_State* L, std::string string);

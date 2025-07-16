@@ -1,8 +1,10 @@
 #include "classes/roblox/instance.hpp"
+#include "classes/enum.hpp"
 #include "classes/roblox/bindableevent.hpp"
 #include "classes/roblox/datamodel.hpp"
 #include "classes/roblox/datatypes/rbxscriptsignal.hpp"
 
+#include "classes/roblox/serviceprovider.hpp"
 #include "common.hpp"
 
 #include "lobject.h"
@@ -15,8 +17,6 @@
 #include <map>
 
 namespace fakeroblox {
-
-#define LUA_TAG_RBXINSTANCE 1
 
 std::map<std::string, std::shared_ptr<rbxClass>> rbxClass::class_map;
 std::vector<std::string> rbxClass::valid_class_names;
@@ -365,15 +365,17 @@ int rbxInstance__namecall(lua_State* L) {
         luaL_error(L, "INTERNAL ERROR: TODO implement '%s'", method_name.c_str());
 }
 
-void rbxInstance__dtor(lua_State* L, std::shared_ptr<rbxInstance> instance) {
-    rbxClass* c = instance->_class.get();
+void rbxInstance__dtor(lua_State* L, void* ud) {
+    std::shared_ptr<rbxInstance>* instance_ptr = static_cast<std::shared_ptr<rbxInstance>*>(ud);
+
+    rbxClass* c = (*instance_ptr)->_class.get();
     while (c) {
         if (c->destructor)
-            c->destructor(instance);
+            c->destructor(*instance_ptr);
         c = c->superclass.get();
     }
 
-    instance.reset();
+    instance_ptr->reset();
 }
 
 std::shared_ptr<rbxInstance> newInstance(lua_State* L, const char* class_name) {
@@ -464,6 +466,7 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
 
     setup_rbxscriptsignal(L);
 
+    // TODO: something in imgui for json stuff (all `rbxClass`s and properties, enums, etc)
     json api_json = json::parse(api_dump);
     rbxClass::valid_class_names.reserve(api_json["Classes"].size());
 
@@ -564,11 +567,35 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
 
     superclass_map.clear();
 
+    for (auto& enum_json : api_json["Enums"]) {
+        std::string enum_name = enum_json["Name"].template get<std::string>();
+
+        Enum enums;
+        enums.name = enum_name;
+
+        for (auto& item_json : enum_json["Items"]) {
+            std::string item_name = item_json["Name"].template get<std::string>();
+            unsigned int item_value = item_json["Value"].template get<int>();
+
+            EnumItem item;
+            item.name = item_name;
+            item.enum_name = enum_name;
+            item.value = item_value;
+
+            enums.item_map[item_name] = item;
+        }
+
+        Enum::enum_map[enum_name] = enums;
+    }
+
+    setup_enums(L);
+
     rbxClass::class_map["Instance"]->methods.at("Destroy").func = rbxInstance_methods::destroy;
     rbxClass::class_map["Instance"]->methods.at("FindFirstChild").func = rbxInstance_methods::findFirstChild;
     rbxClass::class_map["Instance"]->methods.at("GetChildren").func = rbxInstance_methods::getChildren;
     rbxClass::class_map["Instance"]->methods.at("GetFullName").func = rbxInstance_methods::getFullName;
 
+    rbxInstance_ServiceProvider_init(L);
     rbxInstance_DataModel_init(L);
     rbxInstance_BindableEvent_init();
 
@@ -590,7 +617,7 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
 
     lua_setglobal(L, "Instance");
 
-    lua_setuserdatadtor(L, LUA_TAG_RBXINSTANCE, (lua_Destructor) rbxInstance__dtor);
+    lua_setuserdatadtor(L, LUA_TAG_RBXINSTANCE, rbxInstance__dtor);
 
     auto datamodel = newInstance(L, "DataModel");
     datamodel->setValue<std::string>(PROP_INSTANCE_NAME, "FakeRoblox");
@@ -604,6 +631,8 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
     lua_setfield(L, -2, PROP_INSTANCE_PARENT);
 
     datamodel->setValue<std::shared_ptr<rbxInstance>>("Workspace", workspace);
+
+    createService(L, datamodel, "UserInputService");
 
     lua_setglobal(L, "workspace");
 }

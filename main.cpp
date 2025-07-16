@@ -125,6 +125,11 @@ int main(int argc, char** argv) {
     lua_getglobal(L, "shared");
     lua_setreadonly(L, -1, false);
 
+    lua_State* appL = lua_newthread(L);
+    // TODO: UserInputService stuff
+    int appL_ref = lua_ref(L, -1);
+    lua_pop(L, 1);
+
     SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(800, 600, "fakeroblox");
@@ -402,6 +407,8 @@ int main(int argc, char** argv) {
 
     TaskScheduler::cleanup(L);
     rbxInstanceCleanup(L);
+
+    lua_unref(L, appL_ref);
     lua_close(L);
 
     for (auto& entry : DrawEntry::draw_list)

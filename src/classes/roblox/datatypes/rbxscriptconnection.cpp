@@ -23,9 +23,10 @@ int pushNewRbxScriptConnection(lua_State* L, int func_index) {
     luaL_getmetatable(L, "RbxScriptConnection");
     lua_setmetatable(L, -2);
 
-    connection->function_index = addToLookup(L, METHODLOOKUP, [&L, &func_index] {
+    lua_getfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
+    connection->function_index = addToLookup(L, [&L, &func_index] {
         lua_pushvalue(L, func_index);
-    });
+    }, false);
 
     return 1;
 }

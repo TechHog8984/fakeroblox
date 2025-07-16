@@ -38,7 +38,9 @@ namespace fakeroblox {
             inst:Fire(target) \
             task.wait(0.1) \
             assert(upvalue == target) \
-        " }
+        " },
+        { .name = "Enum equality", .value = "assert(Enum.KeyCode == Enum.KeyCode) "},
+        { .name = "EnumItem equality", .value = "assert(Enum.KeyCode.A == Enum.KeyCode.A)" }
     };
     constexpr int test_count = sizeof(test_list) / sizeof(test_list[0]);
 
