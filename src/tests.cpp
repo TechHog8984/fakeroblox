@@ -1,6 +1,7 @@
 #include "tests.hpp"
 
 #include <cstring>
+#include <fstream>
 #include <shared_mutex>
 #include <variant>
 
@@ -107,6 +108,16 @@ namespace fakeroblox {
         if (++finish_count == test_count) {
             *is_running_tests = false;
             *all_tests_succeeded = !fail;
+
+            Console::TestsConsole.debugf("All tests finished!");
+            if (fail)
+                Console::TestsConsole.debug("There were test failures!");
+            else {
+                std::ofstream f(".test_success");
+                if (!f)
+                    Console::TestsConsole.error("failed to create .test_success file");
+                f.close();
+            }
         }
     }
 

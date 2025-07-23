@@ -4,7 +4,6 @@
 #include <curl/curl.h>
 #include <fstream>
 #include <queue>
-#include <thread>
 
 #include "raylib.h"
 #include "rlImGui.h"
