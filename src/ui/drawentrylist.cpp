@@ -28,7 +28,7 @@ void UI_DrawEntryList_render(lua_State *L) {
     ImGui::BeginChild("DrawEntry List##chooser", ImVec2{ImGui::GetContentRegionAvail().x * 0.25f, ImGui::GetContentRegionAvail().y}, ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
     bool chosen_still_exists = false;
 
-    std::shared_lock lock(DrawEntry::draw_list_mutex);
+    std::shared_lock draw_list_lock(DrawEntry::draw_list_mutex);
     for (auto& entry : DrawEntry::draw_list) {
         bool is_selected = drawentry_list_chosen && entry == drawentry_list_chosen;
 
@@ -49,15 +49,16 @@ void UI_DrawEntryList_render(lua_State *L) {
             // if (ImGui::Button("Clone"))
             //     entry->clone();
             if (ImGui::Button("Destroy")) {
-                lock.unlock();
+                draw_list_lock.unlock();
                 entry->destroy(L);
-                lock.lock();
+                draw_list_lock.lock();
             }
             ImGui::EndPopup();
         }
 
         ImGui::PopID();
     }
+    draw_list_lock.unlock();
 
     if (!chosen_still_exists)
         drawentry_list_chosen = nullptr;
@@ -65,6 +66,8 @@ void UI_DrawEntryList_render(lua_State *L) {
     ImGui::EndChild();
 
     if (drawentry_list_chosen) {
+        std::lock_guard members_lock(drawentry_list_chosen->members_mutex);
+
         ImGui::SameLine();
 
         auto& entry = drawentry_list_chosen;
@@ -75,7 +78,8 @@ void UI_DrawEntryList_render(lua_State *L) {
         ImGui::SeparatorText("Properties");
 
         ImGui::Checkbox("Visible", &entry->visible);
-        ImGui::DragScalar("ZIndex", ImGuiDataType_U32, &entry->zindex);
+        if (ImGui::DragScalar("ZIndex", ImGuiDataType_U32, &entry->zindex))
+            entry->onZIndexUpdate();
         ImGui_Color4("Color", entry->color);
 
         switch (entry->type) {
@@ -169,7 +173,7 @@ void UI_DrawEntryList_render(lua_State *L) {
         ImGui::SeparatorText("Methods");
 
         if (ImGui::Button("Destroy")) {
-            lock.unlock();
+            draw_list_lock.unlock();
             entry->destroy(L);
             // lock.lock(); // commented out because there's no code after this
         }

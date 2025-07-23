@@ -100,6 +100,56 @@ void UI_FunctionExplorer_render(lua_State *L) {
         ImGui::Text("Function @ %d", selected_function_index);
         ImGui::Text("Context: %s", is_c ? "C" : "Lua");
 
+        const char* debugname = is_c ? closure->c.debugname : (closure->l.p->debugname ? closure->l.p->debugname->data : nullptr);
+        ImGui::Text("Debug name: %s", debugname);
+
+        if (is_c) {
+            ImGui::Text("Pointer: %p", closure->c.f);
+            ImGui::Text("Upvalue count: %u", closure->nupvalues);
+            ImGui::Text("Stack size: %u", closure->stacksize);
+        } else {
+            Proto* p = closure->l.p;
+
+            ImGui::Text("Upvalue count: %u", p->nups);
+            ImGui::Text("Max stack size: %u", p->maxstacksize);
+            ImGui::Text("Parameter count: %u", p->numparams);
+            ImGui::Text("Vararg?: %s", p->is_vararg ? "YES" : "NO");
+
+            ImGui::SeparatorText("Constants");
+
+            TValue* k = p->k;
+            for (int i = 0; i < p->sizek; i++) {
+                ImGui::Text("%u", i);
+
+                ImGui::SameLine();
+                switch (ttype(k)) {
+                    case LUA_TNIL:
+                        ImGui::Text("nil");
+                        break;
+                    case LUA_TBOOLEAN:
+                        ImGui::Text("bool (%s)", bvalue(k) ? "true" : "false");
+                        break;
+                    case LUA_TNUMBER:
+                        ImGui::Text("number (%.f)", nvalue(k));
+                        break;
+                    case LUA_TSTRING: 
+                        ImGui::TextUnformatted(tsvalue(k)->data, tsvalue(k)->data + tsvalue(k)->len);
+                        break;
+                    default:
+                        ImGui::Text("%s (WIP)", lua_typename(L, ttype(k)));
+                        break;
+                }
+                k++;
+            }
+
+            ImGui::SeparatorText("Upvalues");
+
+            // TODO: upvalues; render as either [function's xth stack element] or [function's xth upvalue];
+            // have a button that selects that function
+
+            ImGui::Text("WIP");
+        }
+
         ImGui::EndChild();
 
         lua_pop(L, 2);

@@ -3,14 +3,24 @@
 #include "classes/vector2.hpp"
 #include "common.hpp"
 
+#include "console.hpp"
 #include "lua.h"
 #include "lualib.h"
+#include <mutex>
 #include <shared_mutex>
 
 namespace fakeroblox {
 
 std::vector<DrawEntry*> DrawEntry::draw_list;
 std::shared_mutex DrawEntry::draw_list_mutex;
+
+void sortDrawList() {
+    std::lock_guard lock(DrawEntry::draw_list_mutex);
+    
+    std::sort(DrawEntry::draw_list.begin(), DrawEntry::draw_list.end(), [] (DrawEntry* a, DrawEntry* b) {
+        return a->zindex < b->zindex;
+    });
+}
 
 DrawEntry::DrawEntry(Type type, const char* class_name) : type(type), class_name(class_name) {}
 DrawEntryLine::DrawEntryLine() : DrawEntry(DrawEntry::Line, "Line") {}
@@ -47,6 +57,10 @@ void DrawEntryText::updateOutline() {
     // outline_text_size = text_size + 1;
 }
 
+void DrawEntry::onZIndexUpdate() {
+    sortDrawList();
+}
+
 #define DrawEntry_free_case(type) case DrawEntry::type:       \
     static_cast<DrawEntry##type*>(this)->~DrawEntry##type();  \
     break;                                                    \
@@ -74,7 +88,7 @@ void DrawEntry::destroy(lua_State* L) {
     // TODO alive index and newindex behavior
     alive = false;
 
-    std::shared_lock lock(DrawEntry::draw_list_mutex);
+    std::lock_guard lock(DrawEntry::draw_list_mutex);
     DrawEntry::draw_list.erase(std::find(DrawEntry::draw_list.begin(), DrawEntry::draw_list.end(), this));
 
     lua_unref(L, ref);
@@ -103,10 +117,12 @@ DrawEntry* pushNewDrawEntry(lua_State* L, const char* class_name) {
     DrawEntry* entry = static_cast<DrawEntry*>(ud);
     entry->ref = lua_ref(L, -1);
     entry->color.a = 255;
-    // FIXME: use zindex (ideally we sort entire draw_list on any zindex change using a shared lock or something)
 
     std::shared_lock lock(DrawEntry::draw_list_mutex);
     DrawEntry::draw_list.push_back(entry);
+    lock.unlock();
+
+    sortDrawList();
 
     luaL_getmetatable(L, "DrawEntry");
     lua_setmetatable(L, -2);
@@ -150,6 +166,8 @@ lua_CFunction getDrawEntryMethod(DrawEntry* entry, const char* key) {
 static int DrawEntry__index(lua_State* L) {
     DrawEntry* entry = static_cast<DrawEntry*>(luaL_checkudata(L, 1, "DrawEntry"));
     const char* key = luaL_checkstring(L, 2);
+
+    std::lock_guard lock(entry->members_mutex);
 
     if (strequal(key, "Visible"))
         lua_pushboolean(L, entry->visible);
@@ -288,11 +306,14 @@ static int DrawEntry__newindex(lua_State* L) {
     DrawEntry* entry = static_cast<DrawEntry*>(luaL_checkudata(L, 1, "DrawEntry"));
     const char* key = luaL_checkstring(L, 2);
 
+    std::lock_guard lock(entry->members_mutex);
+
     if (strequal(key, "Visible"))
         entry->visible = luaL_checkboolean(L, 3);
-    else if (strequal(key, "ZIndex"))
+    else if (strequal(key, "ZIndex")) {
         entry->zindex = luaL_checkinteger(L, 3);
-    else if (strequal(key, "Transparency") || strequal(key, "Opacity")) {
+        entry->onZIndexUpdate();
+    } else if (strequal(key, "Transparency") || strequal(key, "Opacity")) {
         double alpha = luaL_checknumberrange(L, 3, 0, 1) * 255.0;
         entry->color.a = alpha;
         if (entry->type == DrawEntry::Text)
@@ -465,6 +486,88 @@ void open_drawentrylib(lua_State *L) {
     setfunctionfield(L, DrawEntry__namecall, "__namecall");
 
     lua_pop(L, 1);
+}
+
+void DrawEntry::render() {
+    std::lock_guard draw_list_lock(DrawEntry::draw_list_mutex);
+
+    for (size_t i = 0; i < DrawEntry::draw_list.size(); i++) {
+        DrawEntry* entry = DrawEntry::draw_list[i];
+        std::lock_guard members_lock(entry->members_mutex);
+
+        if (!entry->visible)
+            continue;
+
+        auto& color = entry->color;
+        switch (entry->type) {
+            case DrawEntry::Line: {
+                DrawEntryLine* entry_line = static_cast<DrawEntryLine*>(entry);
+                DrawLineEx(entry_line->from, entry_line->to, entry_line->thickness, color);
+                break;
+            }
+            case DrawEntry::Text: {
+                DrawEntryText* entry_text = static_cast<DrawEntryText*>(entry);
+                if (entry_text->outlined) {
+                    // top
+                    DrawTextEx(entry_text->font, entry_text->text.c_str(), { .x = entry_text->position.x, .y = entry_text->position.y - 1 }, entry_text->text_size, 0, entry_text->outline_color);
+                    // right
+                    DrawTextEx(entry_text->font, entry_text->text.c_str(), { .x = entry_text->position.x + 1, .y = entry_text->position.y }, entry_text->text_size, 0, entry_text->outline_color);
+                    // bottom
+                    DrawTextEx(entry_text->font, entry_text->text.c_str(), { .x = entry_text->position.x - 1, .y = entry_text->position.y + 1 }, entry_text->text_size, 0, entry_text->outline_color);
+                    // left
+                    DrawTextEx(entry_text->font, entry_text->text.c_str(), { .x = entry_text->position.x - 1, .y = entry_text->position.y }, entry_text->text_size, 0, entry_text->outline_color);
+                }
+                DrawTextEx(entry_text->font, entry_text->text.c_str(), entry_text->position, entry_text->text_size, 0, color);
+                break;
+            }
+            case DrawEntry::Circle: {
+                DrawEntryCircle* entry_circle = static_cast<DrawEntryCircle*>(entry);
+                if (entry_circle->num_sides) {
+                    DrawPolyLines(entry_circle->center, entry_circle->num_sides, entry_circle->radius, 0, color);
+                    if (entry_circle->filled)
+                        DrawPoly(entry_circle->center, entry_circle->num_sides, entry_circle->radius, 0, color);
+                } else {
+                    DrawCircleLinesV(entry_circle->center, entry_circle->radius, color);
+                    if (entry_circle->filled)
+                        DrawCircleV(entry_circle->center, entry_circle->radius, color);
+                }
+                break;
+            }
+            case DrawEntry::Square: {
+                DrawEntrySquare* entry_square = static_cast<DrawEntrySquare*>(entry);
+                DrawRectangleLinesEx(entry_square->rect, entry_square->thickness, color);
+                if (entry_square->filled)
+                    DrawRectangleRec(entry_square->rect, color);
+                break;
+            }
+            case DrawEntry::Triangle: {
+                DrawEntryTriangle* entry_triangle = static_cast<DrawEntryTriangle*>(entry);
+                // DrawTriangle* doesn't support thickness, so we use DrawLineEx
+                DrawLineEx(entry_triangle->pointa, entry_triangle->pointb, entry_triangle->thickness, color);
+                DrawLineEx(entry_triangle->pointb, entry_triangle->pointc, entry_triangle->thickness, color);
+                DrawLineEx(entry_triangle->pointc, entry_triangle->pointa, entry_triangle->thickness, color);
+                if (entry_triangle->filled)
+                    DrawTriangle(entry_triangle->pointc, entry_triangle->pointb, entry_triangle->pointa, color);
+                break;
+            }
+            case DrawEntry::Quad: {
+                DrawEntryQuad* entry_quad = static_cast<DrawEntryQuad*>(entry);
+                // DrawTriangle* doesn't support thickness, so we use DrawLineEx
+                DrawLineEx(entry_quad->pointa, entry_quad->pointb, entry_quad->thickness, color);
+                DrawLineEx(entry_quad->pointb, entry_quad->pointc, entry_quad->thickness, color);
+                DrawLineEx(entry_quad->pointc, entry_quad->pointd, entry_quad->thickness, color);
+                DrawLineEx(entry_quad->pointd, entry_quad->pointa, entry_quad->thickness, color);
+                if (entry_quad->filled) {
+                    DrawTriangle(entry_quad->pointc, entry_quad->pointb, entry_quad->pointa, color);
+                    DrawTriangle(entry_quad->pointd, entry_quad->pointc, entry_quad->pointa, color);
+                }
+                break;
+            }
+            default:
+                Console::ScriptConsole.debugf("INTERNAL TODO: all DrawEntry types (%s)", entry->class_name);
+                break;
+        }
+    }
 }
 
 }; // namespace fakeroblox

@@ -14,6 +14,8 @@ public:
     static std::vector<DrawEntry*> draw_list;
     static std::shared_mutex draw_list_mutex;
 
+    static void render();
+
     enum Type {
       Line,
       Text,
@@ -28,10 +30,13 @@ public:
     int ref;
     bool alive = true;
 
+    std::shared_mutex members_mutex;
+
     bool visible = false;
     int zindex = 0; // TODO: verify default value
     Color color{255, 255, 255};
 
+    void onZIndexUpdate();
     void free();
     void destroy(lua_State* L);
 
