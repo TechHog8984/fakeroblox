@@ -30,7 +30,7 @@ namespace rbxInstance_DataModel_methods {
 
             task->arg_count = 1;
             task->timing = TaskTiming { .type = TaskTiming::Instant };
-            TaskScheduler::task_queue.push_back(task);
+            TaskScheduler::queueTask(task);
         });
         t.detach();
 

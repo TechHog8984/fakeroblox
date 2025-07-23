@@ -149,8 +149,8 @@ public:
     std::shared_ptr<rbxInstance> findFirstChild(std::string name);
 };
 
-void destroyInstance(lua_State* L, std::shared_ptr<rbxInstance> instance);
-void setInstanceParent(lua_State* L, std::shared_ptr<rbxInstance> instance, std::shared_ptr<rbxInstance> new_parent);
+void destroyInstance(lua_State* L, std::shared_ptr<rbxInstance> instance, bool dont_remove_from_old_parent_children = false);
+void setInstanceParent(lua_State* L, std::shared_ptr<rbxInstance> instance, std::shared_ptr<rbxInstance> new_parent, bool dont_remove_from_old_parent_children = false);
 
 class rbxProperty {
 public:

@@ -7,6 +7,7 @@
 #include "rlgl.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 #include <mutex>
 
@@ -58,16 +59,26 @@ void DrawRectangleLinesPro(Rectangle rec, Vector2 origin, float rotation, float 
     DrawLineEx(bottomLeft, topLeft, thickness, color);
 }
 
+// NOTE: expects Parent
+static bool isStorageChild(std::shared_ptr<rbxInstance> instance) {
+    auto parent = instance->getValue<std::shared_ptr<rbxInstance>>(PROP_INSTANCE_PARENT);
+    assert(parent);
+
+    return std::find(gui_storage_list.begin(), gui_storage_list.end(), parent) != gui_storage_list.end();
+}
 void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> object) {
-    std::shared_ptr<rbxInstance> parent = object->getValue<std::shared_ptr<rbxInstance>>(PROP_INSTANCE_PARENT);
-    const bool is_storage_child = std::find(gui_storage_list.begin(), gui_storage_list.end(), parent) != gui_storage_list.end();
+    auto parent = object->getValue<std::shared_ptr<rbxInstance>>(PROP_INSTANCE_PARENT);
+    const bool is_storage_child = isStorageChild(parent);
 
     // TODO: separate function for pos&size calculations that only get called on parent changed?
+    // above will be nice so a newly-created guiobject's Absolute* values aren't all zero until render
     auto& parent_absolute_position = is_storage_child ? rbxCamera::screen_size : parent->getValue<Vector2>("AbsolutePosition");
     auto& parent_absolute_size = is_storage_child ? rbxCamera::screen_size : parent->getValue<Vector2>("AbsoluteSize");
+    auto parent_absolute_rotation = is_storage_child ? 0.0f : parent->getValue<float>("AbsoluteRotation");
 
     auto& position = object->getValue<UDim2>("Position");
     auto& size = object->getValue<UDim2>("Size");
+    auto rotation = object->getValue<float>("Rotation");
 
     auto position_x_scale = position.x.scale;
     auto position_y_scale = position.y.scale;
@@ -86,13 +97,15 @@ void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> object) {
         parent_absolute_size.y * size.y.scale + size.y.offset
     };
 
+    float absolute_rotation = parent_absolute_rotation + rotation;
+
     object->setValue<Vector2>(L, "AbsolutePosition", absolute_position);
     object->setValue<Vector2>(L, "AbsoluteSize", absolute_size);
+    object->setValue<float>(L, "AbsoluteRotation", absolute_rotation);
 
     if (!object->getValue<bool>("Visible"))
         return;
 
-    auto rotation = object->getValue<float>("Rotation");
     auto backgroundcolor = object->getValue<Color>("BackgroundColor3");
     backgroundcolor.a = (1 - object->getValue<float>("BackgroundTransparency")) * 255;
 
@@ -103,14 +116,14 @@ void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> object) {
         .height = absolute_size.y,
     };
     // TODO: rotation origin still seems a bit off
-    DrawRectanglePro(background_rect, absolute_position, rotation, backgroundcolor);
+    DrawRectanglePro(background_rect, absolute_position, absolute_rotation, backgroundcolor);
 
     auto border_size = object->getValue<int>("BorderSizePixel");
     if (border_size) {
         auto border_color = object->getValue<Color>("BorderColor3");
         border_color.a = backgroundcolor.a;
 
-        DrawRectangleLinesPro(background_rect, absolute_position, rotation, border_size, border_color);
+        DrawRectangleLinesPro(background_rect, absolute_position, absolute_rotation, border_size, border_color);
     }
 }
 

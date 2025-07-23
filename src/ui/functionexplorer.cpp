@@ -25,7 +25,7 @@ namespace UI_FunctionExplorer_methods {
         std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1, "FunctionExplorer");
         luaL_checktype(L, 2, LUA_TFUNCTION);
 
-        std::shared_lock lock(select_function_mutex);
+        std::lock_guard lock(select_function_mutex);
 
         lua_getfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
         selected_function_index = addToLookup(L, [&L] {
@@ -86,7 +86,7 @@ void UI_FunctionExplorer_render(lua_State *L) {
 
         ImGui::SameLine();
 
-        std::shared_lock lock(select_function_mutex);
+        std::lock_guard lock(select_function_mutex);
 
         lua_rawgeti(L, -1, selected_function_index);
         TValue* func_value = L->top - 1;

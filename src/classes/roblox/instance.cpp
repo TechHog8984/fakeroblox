@@ -73,17 +73,22 @@ void rbxInstance::reportChanged(lua_State* L, const char* property) {
     // TODO: GetPropertyChangedSignal
 }
 
-void destroyInstance(lua_State* L, std::shared_ptr<rbxInstance> instance) {
-    std::shared_lock destroyed_lock(instance->destroyed_mutex);
+void clearAllInstanceChildren(lua_State* L, std::shared_ptr<rbxInstance> instance) {
+    std::lock_guard children_lock(instance->children_mutex);
+    auto& children = instance->children;
+
+    for (size_t i = 0; i < children.size(); i++)
+        destroyInstance(L, children[i], true);
+
+    children.clear();
+}
+void destroyInstance(lua_State* L, std::shared_ptr<rbxInstance> instance, bool dont_remove_from_old_parent_children) {
+    std::lock_guard destroyed_lock(instance->destroyed_mutex);
     if (instance->destroyed)
         return;
 
-    std::shared_lock children_lock(instance->children_mutex);
-
     // FIXME: full destroy behavior (consult docs)
-    for (auto& child : instance->children)
-        destroyInstance(L, child);
-    children_lock.unlock();
+    clearAllInstanceChildren(L, instance);
 
     for (auto& event : instance->events) {
         instance->pushEvent(L, event.c_str());
@@ -92,8 +97,8 @@ void destroyInstance(lua_State* L, std::shared_ptr<rbxInstance> instance) {
         lua_pop(L, 1);
     }
 
-    setInstanceParent(L, instance, nullptr);
-    std::shared_lock parent_locked_lock(instance->parent_locked_mutex);
+    setInstanceParent(L, instance, nullptr, dont_remove_from_old_parent_children);
+    std::lock_guard parent_locked_lock(instance->parent_locked_mutex);
 
     instance->destroyed = true;
     instance->parent_locked = true;
@@ -104,7 +109,7 @@ void destroyInstance(lua_State* L, std::shared_ptr<rbxInstance> instance) {
     lua_rawset(L, -3);
 }
 std::shared_ptr<rbxInstance> rbxInstance::findFirstChild(std::string name) {
-    std::shared_lock children_lock(children_mutex);
+    std::lock_guard children_lock(children_mutex);
 
     for (auto& child : children)
         if (child->getValue<std::string>(PROP_INSTANCE_NAME) == name)
@@ -145,22 +150,28 @@ std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int narg, const char*
 }
 
 namespace rbxInstance_methods {
-    int destroy(lua_State *L) {
+    static int clearAllChildren(lua_State* L) {
+        std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
+
+        clearAllInstanceChildren(L, instance);
+        return 0;
+    }
+    static int destroy(lua_State *L) {
         std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
         destroyInstance(L, instance);
         return 0;
     }
-    int findFirstChild(lua_State* L) {
+    static int findFirstChild(lua_State* L) {
         std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
         const char* name = luaL_checkstring(L, 2);
 
         lua_pushinstance(L, instance->findFirstChild(name));
         return 1;
     }
-    int getChildren(lua_State* L) {
+    static int getChildren(lua_State* L) {
         std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
 
-        std::shared_lock children_lock(instance->children_mutex);
+        std::lock_guard children_lock(instance->children_mutex);
         auto& children = instance->children;
 
         lua_createtable(L, children.size(), 0);
@@ -174,7 +185,7 @@ namespace rbxInstance_methods {
 
         return 1;
     }
-    int getFullName(lua_State* L) {
+    static int getFullName(lua_State* L) {
         std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
 
         std::string result;
@@ -192,7 +203,7 @@ namespace rbxInstance_methods {
         lua_pushlstring(L, result.c_str(), result.size());
         return 1;
     }
-    int isA(lua_State* L) {
+    static int isA(lua_State* L) {
         std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
         const char* class_name = luaL_checkstring(L, 2);
 
@@ -251,7 +262,7 @@ int rbxInstance__index(lua_State* L) {
     if (value->property->tags & rbxProperty::WriteOnly)
         luaL_error(L, "'%s' is a write-only member of %s", key, class_name.c_str());
 
-    std::shared_lock values_lock(instance->values_mutex);
+    std::lock_guard values_lock(instance->values_mutex);
 
     if (value->is_nil)
         lua_pushnil(L);
@@ -319,9 +330,7 @@ const char* getOptionalInstanceName(std::shared_ptr<rbxInstance> instance) {
     return instance->getValue<std::string>(PROP_INSTANCE_NAME).c_str();
 }
 
-void setInstanceParent(lua_State* L, std::shared_ptr<rbxInstance> instance, std::shared_ptr<rbxInstance> new_parent) {
-    std::shared_lock parent_locked_lock(instance->parent_locked_mutex);
-
+void setInstanceParent(lua_State* L, std::shared_ptr<rbxInstance> instance, std::shared_ptr<rbxInstance> new_parent, bool dont_remove_from_old_parent_children) {
     std::shared_ptr<rbxInstance> old_parent = instance->getValue<std::shared_ptr<rbxInstance>>(PROP_INSTANCE_PARENT);
     if ((!old_parent && !new_parent) || (!old_parent.get() && !new_parent.get()) || (old_parent && new_parent && old_parent == new_parent))
         return;
@@ -332,11 +341,17 @@ void setInstanceParent(lua_State* L, std::shared_ptr<rbxInstance> instance, std:
     if (new_parent == instance)
         luaL_error(L, "Attempt to set %s as its own parent", getOptionalInstanceName(instance));
 
-    if (old_parent)
-        old_parent->children.erase(std::find(old_parent->children.begin(), old_parent->children.end(), instance));
+    if (old_parent && !dont_remove_from_old_parent_children) {
+        std::lock_guard old_parent_children_lock(old_parent->children_mutex);
 
-    if (new_parent)
+        old_parent->children.erase(std::find(old_parent->children.begin(), old_parent->children.end(), instance));
+    }
+
+    if (new_parent) {
+        std::lock_guard parent_children_lock(new_parent->children_mutex);
+
         new_parent->children.push_back(instance);
+    }
 }
 
 int rbxInstance__newindex(lua_State* L) {
@@ -699,6 +714,7 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
 
     setup_enums(L);
 
+    rbxClass::class_map["Instance"]->methods.at("ClearAllChildren").func = rbxInstance_methods::clearAllChildren;
     rbxClass::class_map["Instance"]->methods.at("Destroy").func = rbxInstance_methods::destroy;
     rbxClass::class_map["Instance"]->methods.at("FindFirstChild").func = rbxInstance_methods::findFirstChild;
     rbxClass::class_map["Instance"]->methods.at("GetChildren").func = rbxInstance_methods::getChildren;

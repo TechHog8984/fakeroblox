@@ -20,7 +20,7 @@ void UI_InstanceExplorer_init(std::shared_ptr<rbxInstance> datamodel) {
 
 static ImGuiTreeNodeFlags base_flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
 void renderInstance(lua_State* L, std::shared_ptr<rbxInstance>& instance) {
-    std::shared_lock instance_children_lock(instance->children_mutex);
+    std::lock_guard instance_children_lock(instance->children_mutex);
 
     auto& object_name = instance->getValue<std::string>(PROP_INSTANCE_NAME);
     auto children_count = instance->children.size();
@@ -159,7 +159,7 @@ void UI_InstanceExplorer_render(lua_State *L) {
 
         ImGui::SeparatorText("Properties");
         if (ImGui::BeginTable("Properties##table", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-            std::shared_lock values_lock(selected_instance->values_mutex);
+            std::lock_guard values_lock(selected_instance->values_mutex);
 
             for (auto& value_pair : selected_instance->values) {
                 auto& property = value_pair.second.property;
@@ -190,8 +190,6 @@ void UI_InstanceExplorer_render(lua_State *L) {
                 if (disabled)
                     ImGui::EndDisabled();
             }
-
-            values_lock.unlock();
 
             ImGui::EndTable();
         }

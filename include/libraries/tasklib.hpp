@@ -26,9 +26,10 @@ const char* taskStatusTostring(TaskStatus status);
 
 class TaskScheduler {
 public:
-    static std::shared_mutex mutex;
     static std::vector<Task*> task_queue;
+    static std::shared_mutex task_queue_mutex;
     static std::unordered_map<lua_State*, Task*> task_map;
+    static std::shared_mutex task_map_mutex;
 
     static void queueTask(Task* task);
     static void resumeTask(Task* task);
@@ -46,7 +47,8 @@ class TaskTiming {
 public:
     enum {
         Instant,
-        Seconds
+        Wait,
+        Delay
     } type = Instant;
 
     double start_time = 0.0;

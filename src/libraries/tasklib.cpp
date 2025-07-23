@@ -34,11 +34,13 @@ const char* taskStatusTostring(TaskStatus status) {
     }
 };
 
-std::shared_mutex TaskScheduler::mutex;
 std::vector<Task*> TaskScheduler::task_queue;
+std::shared_mutex TaskScheduler::task_queue_mutex;
 std::unordered_map<lua_State*, Task*> TaskScheduler::task_map;
+std::shared_mutex TaskScheduler::task_map_mutex;
 
 std::vector<lua_State*> killed_tasks;
+std::shared_mutex killed_tasks_mutex;
 
 Task::Task(lua_State* thread, lua_State* parent_thread, int thread_ref, Feedback feedback, TaskTiming timing, OnKill on_kill)
     : thread(thread), parent_thread(parent_thread), thread_ref(thread_ref), feedback(feedback), timing(timing), on_kill(on_kill)
@@ -56,7 +58,7 @@ Task::~Task() {
 }
 
 void TaskScheduler::queueTask(Task* task) {
-    std::shared_lock lock(mutex);
+    std::lock_guard lock(task_queue_mutex);
     task_queue.push_back(task);
 }
 
@@ -66,14 +68,15 @@ typedef std::variant<bool, std::string> ThreadResumeResult;
 ThreadResumeResult resumeThread(Task* task);
 
 void TaskScheduler::resumeTask(Task* task) {
-    std::shared_lock lock(mutex);
+    std::shared_lock task_queue_lock(task_queue_mutex);
     task_queue.erase(std::find(task_queue.begin(), task_queue.end(), task));
+    task_queue_lock.unlock();
 
     if (task->canceled)
         return;
 
-    if (task->timing.type == TaskTiming::Seconds) {
-        // NOTE: count becomes elapsed
+    if (task->timing.type == TaskTiming::Wait) {
+        // NOTE: count becomes elapsed, so return it
         lua_pushnumber(task->thread, task->timing.count);
         task->arg_count = 1;
     }
@@ -81,34 +84,41 @@ void TaskScheduler::resumeTask(Task* task) {
     if (std::holds_alternative<bool>(result)) { // successful
         if (!std::get<bool>(result)) // yielding
             killTask(task);
-            // ;
     } else
       task->feedback(std::string("failed to resume thread: ").append(std::get<std::string>(result)));
 }
 
-void TaskScheduler::killTask(Task* task) {
-    std::shared_lock lock(mutex);
+// unlocked as in doesn't lock task_map, but still locks task_queue and killed_tasks
+void killTaskUnlocked(Task* task) {
     lua_State* thread = task->thread;
     int thread_ref = task->thread_ref;
 
-    auto task_map_position = task_map.find(thread);
-    if (task_map_position == task_map.end())
+    auto task_map_position = TaskScheduler::task_map.find(thread);
+    if (task_map_position == TaskScheduler::task_map.end())
         return;
 
-    // FIXME: what if we already iterated to a task in the queue and then it gets removed?; should be fine with the mutex we have now
-    auto task_queue_position = std::find(task_queue.begin(), task_queue.end(), task);
-    if (task_queue_position != task_queue.end())
-        task_queue.erase(task_queue_position);
+    std::lock_guard task_queue_lock(TaskScheduler::task_queue_mutex);
+
+    auto task_queue_position = std::find(TaskScheduler::task_queue.begin(), TaskScheduler::task_queue.end(), task);
+    if (task_queue_position != TaskScheduler::task_queue.end())
+        TaskScheduler::task_queue.erase(task_queue_position);
+
+    std::lock_guard killed_tasks_lock(killed_tasks_mutex);
 
     killed_tasks.push_back(thread);
-    task_map.erase(task_map_position);
+
+    TaskScheduler::task_map.erase(task_map_position);
     lua_unref(task->parent_thread, thread_ref);
     // lua_gc(L, LUA_GCSTEP, 0);
     delete task;
 }
+void TaskScheduler::killTask(Task *task) {
+    std::lock_guard lock(task_map_mutex);
+    killTaskUnlocked(task);
+}
 
 Task* TaskScheduler::getTaskFromThread(lua_State* thread) {
-    std::shared_lock lock(mutex);
+    std::lock_guard lock(task_map_mutex);
 
     auto position = task_map.find(thread);
     if (position == task_map.end())
@@ -117,13 +127,13 @@ Task* TaskScheduler::getTaskFromThread(lua_State* thread) {
     return position->second;
 }
 bool TaskScheduler::wasThreadKilled(lua_State* thread) {
-    std::shared_lock lock(mutex);
+    std::lock_guard lock(task_map_mutex);
 
     return std::find(killed_tasks.begin(), killed_tasks.end(), thread) != killed_tasks.end();
 }
 
 void TaskScheduler::run() {
-    std::shared_lock lock(mutex);
+    std::shared_lock task_queue_lock(task_queue_mutex);
 
     std::vector<Task*> filtered_tasks;
     filtered_tasks.reserve(task_queue.size());
@@ -138,26 +148,31 @@ void TaskScheduler::run() {
             case TaskTiming::Instant:
                 passes = true;
                 break;
-            case TaskTiming::Seconds:
+            case TaskTiming::Wait: {
                 double elapsed = lua_clock() - timing.start_time;
                 passes = elapsed >= timing.count;
                 if (passes) timing.count = elapsed;
+                break;
+            }
+            case TaskTiming::Delay:
+                passes = (lua_clock() - timing.start_time) >= timing.count;
                 break;
         }
 
         if (passes)
             filtered_tasks.push_back(task);
     }
+    task_queue_lock.unlock();
 
     for (size_t i = 0; i < filtered_tasks.size(); i++)
         resumeTask(filtered_tasks[i]);
 }
 
 void TaskScheduler::cleanup() {
-    std::shared_lock lock(mutex);
+    std::lock_guard lock(task_map_mutex);
 
     for (auto& pair : task_map)
-        killTask(pair.second);
+        killTaskUnlocked(pair.second);
     task_map.clear();
 }
 
@@ -345,7 +360,7 @@ int fakeroblox_task_wait(lua_State* L) {
     double seconds = getSeconds(L);
 
     task->status = WAITING;
-    task->timing = TaskTiming { .type = TaskTiming::Seconds, .start_time = lua_clock(), .count = seconds };
+    task->timing = TaskTiming { .type = TaskTiming::Wait, .start_time = lua_clock(), .count = seconds };
     task->arg_count = 0;
     TaskScheduler::queueTask(task);
 
@@ -397,7 +412,7 @@ int fakeroblox_task_delay(lua_State* L) {
 
     task->arg_count = arg_count - 1;
     task->status = DELAYING;
-    task->timing = TaskTiming { .type = TaskTiming::Seconds, .start_time = lua_clock(), .count = seconds };
+    task->timing = TaskTiming { .type = TaskTiming::Delay, .start_time = lua_clock(), .count = seconds };
     TaskScheduler::queueTask(task);
 
     return 1;
