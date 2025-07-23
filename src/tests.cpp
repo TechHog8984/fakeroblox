@@ -1,9 +1,7 @@
 #include "tests.hpp"
 
 #include <cstring>
-#include <fstream>
 #include <shared_mutex>
-#include <thread>
 #include <variant>
 
 #include "libraries/tasklib.hpp"
@@ -85,133 +83,6 @@ namespace fakeroblox {
     #define PASS_ERROR "failed to start thread: " PASS
     const int pass_error_length = strlen(PASS_ERROR);
 
-    void runAllTests(lua_State* L, bool& is_running_tests, bool& all_tests_succeeded) {
-        all_tests_succeeded = false;
-
-        std::vector<std::thread> thread_list;
-        thread_list.reserve(test_count);
-
-        bool fail = false;
-        // std::shared_mutex mutex;
-        // for (int i = 0; i < test_count; i++) {
-        //     auto& test = test_list[i];
-
-        //     thread_list.emplace_back([&L, &fail, &mutex, &test] () {
-        //         std::lock_guard lock(mutex);
-
-        //         bool feedback_ran = false;
-        //         Feedback feedback = [&fail, &test, &feedback_ran](std::string error) {
-        //             feedback_ran = true;
-        //             if (error.size() == pass_error_length && error.rfind(PASS_ERROR, 0) == 0)
-        //                 Console::TestsConsole.debugf("Test '%s' passed!", test.name);
-        //             else {
-        //                 fail = true;
-        //                 Console::TestsConsole.errorf("error occured while testing '%s': %s", test.name, error.c_str());
-        //             }
-        //         };
-
-        //         if (std::holds_alternative<lua_CFunction>(test.value)) {
-        //             lua_pushcfunction(L, std::get<lua_CFunction>(test.value), test.name);
-
-        //             auto error = tryCreateThreadAndSpawnFunction(L, feedback, &Console::TestsConsole);
-        //             if (error) feedback(*error);
-        //         } else {
-        //             auto gate = std::make_shared<ThreadGate>();
-        //             auto error = tryRunCode(L, "TEST", std::get<std::string>(test.value).c_str(), feedback, gate->func, &Console::TestsConsole);
-        //             if (error) feedback(*error);
-
-        //             gate->wait();
-
-        //             if (!feedback_ran)
-        //                 feedback(PASS_ERROR);
-        //         }
-        //     });
-        // }
-        std::thread([&L, &fail] {
-            for (int i = 0; i < test_count; i++) {
-                auto& test = test_list[i];
-                bool feedback_ran = false;
-                Feedback feedback = [&fail, &test, &feedback_ran](std::string error) {
-                    feedback_ran = true;
-                    if (error.size() == pass_error_length && error.rfind(PASS_ERROR, 0) == 0)
-                        Console::TestsConsole.debugf("Test '%s' passed!", test.name);
-                    else {
-                        fail = true;
-                        Console::TestsConsole.errorf("error occured while testing '%s': %s", test.name, error.c_str());
-                    }
-                };
-
-                if (std::holds_alternative<lua_CFunction>(test.value)) {
-                    lua_pushcfunction(L, std::get<lua_CFunction>(test.value), test.name);
-
-                    auto error = tryCreateThreadAndSpawnFunction(L, feedback, &Console::TestsConsole);
-                    if (error) feedback(*error);
-                } else {
-                    auto gate = std::make_shared<ThreadGate>();
-                    auto error = tryRunCode(L, "TEST", std::get<std::string>(test.value).c_str(), feedback, gate->func, &Console::TestsConsole);
-                    if (error) feedback(*error);
-
-                    gate->wait();
-
-                    if (!feedback_ran)
-                        feedback(PASS_ERROR);
-                }
-            }
-        }).join();
-
-        // for (int i = 0; i < test_count; i++) {
-        //     auto& test = test_list[i];
-        //     lua_State* state = lua_newthread(L);
-
-        //     thread_list.emplace_back([&state, &fail, &test] {
-        //         bool feedback_ran = false;
-        //         Feedback feedback = [&fail, &test, &feedback_ran](std::string error) {
-        //             feedback_ran = true;
-        //             if (error.size() == pass_error_length && error.rfind(PASS_ERROR, 0) == 0)
-        //                 Console::TestsConsole.debugf("Test '%s' passed!", test.name);
-        //             else {
-        //                 fail = true;
-        //                 Console::TestsConsole.errorf("error occured while testing '%s': %s", test.name, error.c_str());
-        //             }
-        //         };
-
-        //         if (std::holds_alternative<lua_CFunction>(test.value)) {
-        //             lua_pushcfunction(state, std::get<lua_CFunction>(test.value), test.name);
-
-        //             auto error = tryCreateThreadAndSpawnFunction(state, feedback, &Console::TestsConsole);
-        //             if (error) feedback(*error);
-        //         } else {
-        //             auto gate = std::make_shared<ThreadGate>();
-        //             auto error = tryRunCode(state, "TEST", std::get<std::string>(test.value).c_str(), feedback, gate->func, &Console::TestsConsole);
-        //             if (error) feedback(*error);
-
-        //             gate->wait();
-
-        //             if (!feedback_ran)
-        //                 feedback(PASS_ERROR);
-        //         }
-        //     });
-        // }
-        // for (auto& t : thread_list) {
-        //     if (t.joinable())
-        //         t.join();
-        // }
-        // lua_pop(L, test_count); // pop threads
-
-        Console::TestsConsole.debugf("All tests finished!");
-        all_tests_succeeded = !fail;
-        if (fail)
-            Console::TestsConsole.debug("There were test failures!");
-        else {
-            std::ofstream f(".test_success");
-            if (!f)
-                Console::TestsConsole.error("failed to create .test_success file");
-            f.close();
-        }
-
-        is_running_tests = false;
-    }
-
     int finish_count = 0;
     bool fail = false;
 
@@ -269,18 +140,12 @@ namespace fakeroblox {
                 if (error) test_feedbacks[i](*error);
                 onFinish();
             } else {
-                auto gate = std::make_shared<ThreadGate>();
                 auto error = tryRunCode(L, "TEST", std::get<std::string>(test.value).c_str(), test_feedbacks[i], [i] {
                     if (!feedback_ran_list[i])
                         test_feedbacks[i](PASS_ERROR);
                     onFinish();
                 }, &Console::TestsConsole);
                 if (error) test_feedbacks[i](*error);
-
-                // gate->wait();
-
-                // if (!feedback_ran)
-                //     feedback(PASS_ERROR);
             }
         }
     }

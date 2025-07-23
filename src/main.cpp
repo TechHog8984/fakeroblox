@@ -405,10 +405,6 @@ int main(int argc, char** argv) {
 
         if (should_run_tests) {
             should_run_tests = false;
-            // std::thread([&testL, &is_running_tests, &all_tests_succeeded]{
-            //     runAllTests(testL, is_running_tests, all_tests_succeeded);
-            // }).detach();
-            // startAllTests(testL, is_running_tests, all_tests_succeeded);
             startAllTests(testL);
         }
 
