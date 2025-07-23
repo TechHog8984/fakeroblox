@@ -45,13 +45,13 @@ CURLcode performRequest(CURL* curl, struct MemoryStruct* chunk, const char* meth
 }
 /* credits END: https://stackoverflow.com/questions/27007379/how-do-i-get-response-value-using-curl-in-c/27007490#27007490 */
 
-int newGetRequest(const char* url, struct MemoryStruct* chunk) {
+CURLcode newGetRequest(const char* url, struct MemoryStruct* chunk) {
     CURL* curl = curl_easy_init();
     if (curl) {
         curl_easy_setopt(curl, CURLOPT_URL, url);
         return performRequest(curl, chunk);
     }
-    return 1;
+    return CURLE_FAILED_INIT;
 }
 
 };

@@ -6,6 +6,7 @@
 
 #include "lua.h"
 #include "lualib.h"
+
 #include <thread>
 
 namespace fakeroblox {
@@ -19,11 +20,13 @@ namespace rbxInstance_DataModel_methods {
 
         std::thread t([L, url, task] () {
             struct MemoryStruct chunk;
-            int res = newGetRequest(url.c_str(), &chunk);
+
+            CURLcode res = newGetRequest(url.c_str(), &chunk);
             if (res)
                 luaL_errorL(L, "failed to make HTTP request (%d)", res);
 
             lua_pushlstring(L, chunk.memory, chunk.size);
+            if (chunk.memory) free(chunk.memory);
 
             task->arg_count = 1;
             task->timing = TaskTiming { .type = TaskTiming::Instant };

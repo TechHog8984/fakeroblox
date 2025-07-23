@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <curl/curl.h>
 
 namespace fakeroblox {
 
@@ -8,6 +9,6 @@ struct MemoryStruct {
     char *memory;
     size_t size;
 };
-int newGetRequest(const char* url, struct MemoryStruct* chunk);
+CURLcode newGetRequest(const char* url, struct MemoryStruct* chunk);
 
 };
