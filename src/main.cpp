@@ -149,6 +149,14 @@ int main(int argc, char** argv) {
     lua_pop(L, 1);
     Console::ScriptConsole.debugf("test state: %p", testL);
 
+    {
+        char buf[100];
+        snprintf(buf, 100, "App State (%p)", appL);
+        appL_pair.second->identifier.assign(buf);
+        snprintf(buf, 100, "Test State (%p)", testL);
+        testL_pair.second->identifier.assign(buf);
+    }
+
     SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(800, 600, "fakeroblox");
