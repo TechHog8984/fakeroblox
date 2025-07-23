@@ -6,6 +6,7 @@
 #include "raylib.h"
 #include "rlgl.h"
 
+#include <algorithm>
 #include <cmath>
 #include <mutex>
 
@@ -57,7 +58,10 @@ void DrawRectangleLinesPro(Rectangle rec, Vector2 origin, float rotation, float 
     DrawLineEx(bottomLeft, topLeft, thickness, color);
 }
 
-void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> object, std::shared_ptr<rbxInstance> parent, bool is_storage_child = false) {
+void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> object) {
+    std::shared_ptr<rbxInstance> parent = object->getValue<std::shared_ptr<rbxInstance>>(PROP_INSTANCE_PARENT);
+    const bool is_storage_child = std::find(gui_storage_list.begin(), gui_storage_list.end(), parent) != gui_storage_list.end();
+
     // TODO: separate function for pos&size calculations that only get called on parent changed?
     auto& parent_absolute_position = is_storage_child ? rbxCamera::screen_size : parent->getValue<Vector2>("AbsolutePosition");
     auto& parent_absolute_size = is_storage_child ? rbxCamera::screen_size : parent->getValue<Vector2>("AbsoluteSize");
@@ -108,39 +112,45 @@ void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> object, std::sha
 
         DrawRectangleLinesPro(background_rect, absolute_position, rotation, border_size, border_color);
     }
+}
 
-    std::shared_lock child_lock(object->children_mutex);
-    for (unsigned int ichild = 0; ichild < object->children.size(); ichild++) {
-        auto& child = object->children[ichild];
-        if (child->isA("GuiObject"))
-            renderGuiObject(L, child, object, false);
+std::vector<std::shared_ptr<rbxInstance>> render_list;
+void contributeToRenderList(std::shared_ptr<rbxInstance> instance, bool is_storage = false) {
+    if (!is_storage) {
+        if (instance->isA("LayerCollector")) {
+            if (!instance->getValue<bool>("Enabled"))
+                return;
+            goto ADD_CHILDREN;
+        }
+
+        if (!instance->isA("GuiObject"))
+            return;
+
+        render_list.push_back(instance);
     }
+
+    ADD_CHILDREN:
+    std::lock_guard lock(instance->children_mutex);
+    for (size_t i = 0; i < instance->children.size(); i++)
+        contributeToRenderList(instance->children[i]);
 }
 
 void rbxInstance_BasePlayerGui_process(lua_State *L) {
-    for (unsigned int istorage = 0; istorage < gui_storage_list.size(); istorage++) {
-        auto& storage = gui_storage_list[istorage];
-        std::shared_lock storage_child_lock(storage->children_mutex);
+    render_list.clear();
 
-        for (unsigned int iparent = 0; iparent < storage->children.size(); iparent++) {
-            auto& parent = storage->children[iparent];
+    for (unsigned int i = 0; i < gui_storage_list.size(); i++)
+        contributeToRenderList(gui_storage_list[i], true);
 
-            if (parent->isA("LayerCollector")) {
-                // render children
-                std::shared_lock parent_child_lock(parent->children_mutex);
-                for (unsigned int ichild = 0; ichild < parent->children.size(); ichild++) {
-                    auto& child = parent->children[ichild];
+    std::sort(render_list.begin(), render_list.end(), [] (std::shared_ptr<rbxInstance> a, std::shared_ptr<rbxInstance> b) {
+        return a->getValue<int>("ZIndex") < b->getValue<int>("ZIndex");
+    });
 
-                    if (child->isA("GuiObject"))
-                        renderGuiObject(L, child, parent, true);
-                }
-            }
-        }
-    }
+    for (unsigned int i = 0; i < render_list.size(); i++)
+        renderGuiObject(L, render_list[i]);
 }
 
 void rbxInstance_BasePlayerGui_init(lua_State *L, std::initializer_list<std::shared_ptr<rbxInstance>> initial_gui_storage_list) {
-    gui_storage_list.insert(gui_storage_list.begin(), initial_gui_storage_list.begin(), initial_gui_storage_list.end());
+    gui_storage_list.insert(gui_storage_list.end(), initial_gui_storage_list.begin(), initial_gui_storage_list.end());
 }
 
 };

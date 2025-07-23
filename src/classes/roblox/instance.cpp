@@ -8,6 +8,7 @@
 #include "classes/roblox/datatypes/rbxscriptsignal.hpp"
 
 #include "classes/roblox/guiobject.hpp"
+#include "classes/roblox/layercollector.hpp"
 #include "classes/roblox/serviceprovider.hpp"
 #include "classes/roblox/userinputservice.hpp"
 #include "classes/vector2.hpp"
@@ -746,6 +747,7 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
     rbxInstance_UserInputService_init(L);
 
     rbxInstance_Camera_init(L, workspace.get());
+    rbxInstance_LayerCollector_init();
     rbxInstance_GuiObject_init();
 
     ServiceProvider::createService(L, datamodel, "UserInputService");
