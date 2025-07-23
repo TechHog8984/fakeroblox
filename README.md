@@ -2,6 +2,8 @@
 
 fakeroblox is an attempt to create a Luau environment that is as close to Roblox's as possible.
 
+creation date: Jun 25, 2025
+
 # BUILDING
 fakeroblox uses [mate.h](https://github.com/TomasBorquez/mate.h/) for its core build system, along with some shell files (sorry) to build the dependencies
 
