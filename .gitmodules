@@ -1,6 +1,6 @@
-[submodule "dependencies/rlImGui"]
-	path = dependencies/rlImGui
-	url = https://github.com/raylib-extras/rlImGui
 [submodule "dependencies/Luau"]
 	path = dependencies/Luau
 	url = https://github.com/luau-lang/luau.git
+[submodule "dependencies/rlImGui"]
+	path = dependencies/rlImGui
+	url = https://github.com/raylib-extras/rlImGui.git
