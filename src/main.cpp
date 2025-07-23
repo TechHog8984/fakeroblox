@@ -144,6 +144,11 @@ int main(int argc, char** argv) {
     lua_pop(L, 1);
     Console::ScriptConsole.debugf("app state: %p", appL);
 
+    auto testL_pair = createThread(L, [] (std::string error) { Console::TestsConsole.error(error); });
+    lua_State* testL = testL_pair.first;
+    lua_pop(L, 1);
+    Console::ScriptConsole.debugf("test state: %p", testL);
+
     SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(800, 600, "fakeroblox");
@@ -163,6 +168,8 @@ int main(int argc, char** argv) {
     bool has_tested = false;
     bool is_running_tests = false;
     bool should_run_tests = false;
+
+    setupTests(&is_running_tests, &all_tests_succeeded);
 
     pushNewScriptEditorTab();
 
@@ -398,9 +405,11 @@ int main(int argc, char** argv) {
 
         if (should_run_tests) {
             should_run_tests = false;
-            std::thread([&appL, &is_running_tests, &all_tests_succeeded]{
-                runAllTests(appL, is_running_tests, all_tests_succeeded);
-            }).detach();
+            // std::thread([&testL, &is_running_tests, &all_tests_succeeded]{
+            //     runAllTests(testL, is_running_tests, all_tests_succeeded);
+            // }).detach();
+            // startAllTests(testL, is_running_tests, all_tests_succeeded);
+            startAllTests(testL);
         }
 
         workspace->setValue<double>(appL, "DistributedGameTime", lua_clock() - initial_game_time);
@@ -410,6 +419,7 @@ int main(int argc, char** argv) {
     CloseWindow();
 
     TaskScheduler::killTask(appL_pair.second);
+    TaskScheduler::killTask(testL_pair.second);
 
     for (auto& entry : DrawEntry::draw_list)
         entry->free();

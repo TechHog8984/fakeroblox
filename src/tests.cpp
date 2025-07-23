@@ -92,12 +92,44 @@ namespace fakeroblox {
         thread_list.reserve(test_count);
 
         bool fail = false;
-        std::shared_mutex mutex;
-        for (int i = 0; i < test_count; i++) {
-            auto& test = test_list[i];
+        // std::shared_mutex mutex;
+        // for (int i = 0; i < test_count; i++) {
+        //     auto& test = test_list[i];
 
-            thread_list.emplace_back([&L, &fail, &mutex, &test] () {
-                std::lock_guard<std::shared_mutex> lock(mutex);
+        //     thread_list.emplace_back([&L, &fail, &mutex, &test] () {
+        //         std::lock_guard lock(mutex);
+
+        //         bool feedback_ran = false;
+        //         Feedback feedback = [&fail, &test, &feedback_ran](std::string error) {
+        //             feedback_ran = true;
+        //             if (error.size() == pass_error_length && error.rfind(PASS_ERROR, 0) == 0)
+        //                 Console::TestsConsole.debugf("Test '%s' passed!", test.name);
+        //             else {
+        //                 fail = true;
+        //                 Console::TestsConsole.errorf("error occured while testing '%s': %s", test.name, error.c_str());
+        //             }
+        //         };
+
+        //         if (std::holds_alternative<lua_CFunction>(test.value)) {
+        //             lua_pushcfunction(L, std::get<lua_CFunction>(test.value), test.name);
+
+        //             auto error = tryCreateThreadAndSpawnFunction(L, feedback, &Console::TestsConsole);
+        //             if (error) feedback(*error);
+        //         } else {
+        //             auto gate = std::make_shared<ThreadGate>();
+        //             auto error = tryRunCode(L, "TEST", std::get<std::string>(test.value).c_str(), feedback, gate->func, &Console::TestsConsole);
+        //             if (error) feedback(*error);
+
+        //             gate->wait();
+
+        //             if (!feedback_ran)
+        //                 feedback(PASS_ERROR);
+        //         }
+        //     });
+        // }
+        std::thread([&L, &fail] {
+            for (int i = 0; i < test_count; i++) {
+                auto& test = test_list[i];
                 bool feedback_ran = false;
                 Feedback feedback = [&fail, &test, &feedback_ran](std::string error) {
                     feedback_ran = true;
@@ -124,12 +156,47 @@ namespace fakeroblox {
                     if (!feedback_ran)
                         feedback(PASS_ERROR);
                 }
-            });
-        }
-        for (auto& t : thread_list) {
-            if (t.joinable())
-                t.join();
-        }
+            }
+        }).join();
+
+        // for (int i = 0; i < test_count; i++) {
+        //     auto& test = test_list[i];
+        //     lua_State* state = lua_newthread(L);
+
+        //     thread_list.emplace_back([&state, &fail, &test] {
+        //         bool feedback_ran = false;
+        //         Feedback feedback = [&fail, &test, &feedback_ran](std::string error) {
+        //             feedback_ran = true;
+        //             if (error.size() == pass_error_length && error.rfind(PASS_ERROR, 0) == 0)
+        //                 Console::TestsConsole.debugf("Test '%s' passed!", test.name);
+        //             else {
+        //                 fail = true;
+        //                 Console::TestsConsole.errorf("error occured while testing '%s': %s", test.name, error.c_str());
+        //             }
+        //         };
+
+        //         if (std::holds_alternative<lua_CFunction>(test.value)) {
+        //             lua_pushcfunction(state, std::get<lua_CFunction>(test.value), test.name);
+
+        //             auto error = tryCreateThreadAndSpawnFunction(state, feedback, &Console::TestsConsole);
+        //             if (error) feedback(*error);
+        //         } else {
+        //             auto gate = std::make_shared<ThreadGate>();
+        //             auto error = tryRunCode(state, "TEST", std::get<std::string>(test.value).c_str(), feedback, gate->func, &Console::TestsConsole);
+        //             if (error) feedback(*error);
+
+        //             gate->wait();
+
+        //             if (!feedback_ran)
+        //                 feedback(PASS_ERROR);
+        //         }
+        //     });
+        // }
+        // for (auto& t : thread_list) {
+        //     if (t.joinable())
+        //         t.join();
+        // }
+        // lua_pop(L, test_count); // pop threads
 
         Console::TestsConsole.debugf("All tests finished!");
         all_tests_succeeded = !fail;
@@ -143,6 +210,79 @@ namespace fakeroblox {
         }
 
         is_running_tests = false;
+    }
+
+    int finish_count = 0;
+    bool fail = false;
+
+    bool* is_running_tests = NULL;
+    bool* all_tests_succeeded = NULL;
+
+    std::vector<bool> feedback_ran_list;
+    std::vector<Feedback> test_feedbacks;
+
+    void setupTests(bool *is_running_tests_in, bool *all_tests_succeeded_in) {
+        is_running_tests = is_running_tests_in;
+        all_tests_succeeded = all_tests_succeeded_in;
+
+        feedback_ran_list.reserve(test_count);
+        test_feedbacks.reserve(test_count);
+    }
+
+    std::shared_mutex finish_mutex;
+    void onFinish() {
+        std::lock_guard lock(finish_mutex);
+
+        if (++finish_count == test_count) {
+            *is_running_tests = false;
+            *all_tests_succeeded = !fail;
+        }
+    }
+
+    void startAllTests(lua_State *L) {
+        fail = false;
+        finish_count = 0;
+
+        feedback_ran_list.clear();
+        test_feedbacks.clear();
+
+        for (int i = 0; i < test_count; i++) {
+            auto& test = test_list[i];
+
+            feedback_ran_list.push_back(false);
+            test_feedbacks.push_back([i](std::string error) {
+                feedback_ran_list[i] = true;
+
+                auto& test = test_list[i];
+                if (error.size() == pass_error_length && error.rfind(PASS_ERROR, 0) == 0)
+                    Console::TestsConsole.debugf("Test '%s' passed!", test.name);
+                else {
+                    fail = true;
+                    Console::TestsConsole.errorf("error occured while testing '%s': %s", test.name, error.c_str());
+                }
+            });
+
+            if (std::holds_alternative<lua_CFunction>(test.value)) {
+                lua_pushcfunction(L, std::get<lua_CFunction>(test.value), test.name);
+
+                auto error = tryCreateThreadAndSpawnFunction(L, test_feedbacks[i], &Console::TestsConsole);
+                if (error) test_feedbacks[i](*error);
+                onFinish();
+            } else {
+                auto gate = std::make_shared<ThreadGate>();
+                auto error = tryRunCode(L, "TEST", std::get<std::string>(test.value).c_str(), test_feedbacks[i], [i] {
+                    if (!feedback_ran_list[i])
+                        test_feedbacks[i](PASS_ERROR);
+                    onFinish();
+                }, &Console::TestsConsole);
+                if (error) test_feedbacks[i](*error);
+
+                // gate->wait();
+
+                // if (!feedback_ran)
+                //     feedback(PASS_ERROR);
+            }
+        }
     }
 
     // FIXME: pcall just to error is redundant; reflect in underlying tests as well

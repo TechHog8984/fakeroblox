@@ -39,4 +39,6 @@ namespace fakeroblox {
     };
 
     void runAllTests(lua_State* L, bool& is_running_tests, bool& all_tests_succeeded);
+    void setupTests(bool* is_running_tests, bool* all_tests_succeeded);
+    void startAllTests(lua_State* L);
 }; // namespace fakeroblox
