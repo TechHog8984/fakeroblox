@@ -31,15 +31,15 @@ public:
     static std::unordered_map<lua_State*, Task*> task_map;
 
     static void queueTask(Task* task);
-    static void resumeTask(lua_State* L, Task* task);
-    static void killTask(lua_State* L, Task* task);
+    static void resumeTask(Task* task);
+    static void killTask(Task* task);
 
     static Task* getTaskFromThread(lua_State* thread);
     static bool wasThreadKilled(lua_State* thread);
 
-    static void run(lua_State* L);
+    static void run();
 
-    static void cleanup(lua_State* L);
+    static void cleanup();
 };
 
 class TaskTiming {
@@ -49,7 +49,8 @@ public:
         Seconds
     } type = Instant;
 
-    double end_time = 0.0;
+    double start_time = 0.0;
+    double count = 0.0;
 };
 
 class Task {
@@ -84,6 +85,8 @@ int fakeroblox_task_delay(lua_State* L);
 int fakeroblox_task_cancel(lua_State* L);
 int fakeroblox_task_status(lua_State* L);
 int fakeroblox_task_wait(lua_State* L);
+
+std::pair<lua_State*, Task*> createThread(lua_State* L, Feedback feedback, OnKill on_kill = nullptr);
 
 std::optional<std::string> tryCreateThreadAndSpawnFunction(lua_State* L, Feedback feedback, Console* console = nullptr);
 std::optional<std::string> tryRunCode(lua_State* L, const char* chunk_name, const char* source, Feedback feedback, OnKill on_kill = nullptr, Console* console = nullptr);

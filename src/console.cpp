@@ -1,7 +1,6 @@
 #include "console.hpp"
 
 #include <cstdarg>
-#include "imgui.h"
 
 namespace fakeroblox {
 
@@ -11,13 +10,19 @@ Console::Console(bool show_info, bool show_warning, bool show_error, bool show_d
 Console Console::ScriptConsole;
 Console Console::TestsConsole(true, true, true, true);
 
+ImVec4 Console::ColorINFO = {1, 1, 1, 1};
+ImVec4 Console::ColorWARNING = {1, 1, 0, 1};
+ImVec4 Console::ColorERROR = {1, 0, 0, 1};
+ImVec4 Console::ColorDEBUG = {1, 0, 1, 1};
+
 void Console::clear() {
-    std::shared_lock lock(mutex);
+    std::lock_guard lock(mutex);
     message_count = 0;
     messages.clear();
 }
 
 void Console::renderMessages() {
+    std::lock_guard lock(mutex);
     for (size_t i = 0; i < message_count; i++) {
         bool skip = false;
         auto& message = messages[i];
@@ -25,19 +30,19 @@ void Console::renderMessages() {
         switch (message.type) {
             case Console::Message::INFO:
                 skip = !show_info;
-                color = ImVec4{1,1,1,1};
+                color = ColorINFO;
                 break;
             case Console::Message::WARNING:
                 skip = !show_warning;
-                color = ImVec4{1,1,0,1};
+                color = ColorWARNING;
                 break;
             case Console::Message::ERROR:
                 skip = !show_error;
-                color = ImVec4{1,0,0,1};
+                color = ColorERROR;
                 break;
             case Console::Message::DEBUG:
                 skip = !show_debug;
-                color = ImVec4{1,0,1,1};
+                color = ColorDEBUG;
                 break;
         }
         if (skip) continue;
@@ -57,7 +62,7 @@ void Console::renderMessages() {
 }
 
 void Console::log(std::string message, Message::Type type) {
-    std::shared_lock lock(mutex);
+    std::lock_guard lock(mutex);
     message_count++;
     messages.push_back({ .type = type, .content = message });
 }

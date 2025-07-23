@@ -5,10 +5,12 @@
 
 #include "lua.h"
 #include "lualib.h"
+#include <shared_mutex>
 
 namespace fakeroblox {
 
 std::vector<DrawEntry*> DrawEntry::draw_list;
+std::shared_mutex DrawEntry::draw_list_mutex;
 
 DrawEntry::DrawEntry(Type type, const char* class_name) : type(type), class_name(class_name) {}
 DrawEntryLine::DrawEntryLine() : DrawEntry(DrawEntry::Line, "Line") {}
@@ -65,14 +67,26 @@ void DrawEntry::free() {
 
 #undef DrawEntry_free_case
 
+void DrawEntry::destroy(lua_State* L) {
+    if (!alive)
+        return;
+
+    // TODO alive index and newindex behavior
+    alive = false;
+
+    std::shared_lock lock(DrawEntry::draw_list_mutex);
+    DrawEntry::draw_list.erase(std::find(DrawEntry::draw_list.begin(), DrawEntry::draw_list.end(), this));
+
+    lua_unref(L, ref);
+    free();
+}
+
 #define DrawEntry_new_branch(type) if (strequal(class_name, #type)) { \
     ud = lua_newuserdata(L, sizeof(DrawEntry##type)); \
     new(ud) DrawEntry##type(); \
 }
 
-static int DrawEntry_new(lua_State* L) {
-    const char* class_name = luaL_checkstring(L, 1);
-
+DrawEntry* pushNewDrawEntry(lua_State* L, const char* class_name) {
     void* ud = nullptr;
     // FIXME: all DrawEntry types
     DrawEntry_new_branch(Line)
@@ -87,14 +101,21 @@ static int DrawEntry_new(lua_State* L) {
     assert(ud);
 
     DrawEntry* entry = static_cast<DrawEntry*>(ud);
+    entry->ref = lua_ref(L, -1);
     entry->color.a = 255;
     // FIXME: use zindex (ideally we sort entire draw_list on any zindex change using a shared lock or something)
-    // FIXME: synchronize
+
+    std::shared_lock lock(DrawEntry::draw_list_mutex);
     DrawEntry::draw_list.push_back(entry);
 
     luaL_getmetatable(L, "DrawEntry");
     lua_setmetatable(L, -2);
 
+    return entry;
+}
+static int DrawEntry_new(lua_State* L) {
+    const char* class_name = luaL_checkstring(L, 1);
+    pushNewDrawEntry(L, class_name);
     return 1;
 }
 
@@ -107,14 +128,7 @@ namespace DrawEntry_methods {
         if (!obj->alive)
             luaL_error(L, "INTERNAL TODO: determine remove behavior when DrawEntry is already removed");
 
-        // TODO alive index and newindex behavior
-        obj->alive = false;
-
-        // FIXME: synchronize
-        DrawEntry::draw_list.erase(std::find(DrawEntry::draw_list.begin(), DrawEntry::draw_list.end(), obj));
-
-        obj->free();
-
+        obj->destroy(L);
         return 0;
     }
 };
@@ -144,7 +158,7 @@ static int DrawEntry__index(lua_State* L) {
     else if (strequal(key, "Transparency") || strequal(key, "Opacity"))
         lua_pushnumber(L, entry->color.a / 255.0);
     else if (strequal(key, "Color"))
-        pushColor3(L, entry->color);
+        pushColor(L, entry->color);
     else {
         lua_CFunction func = getDrawEntryMethod(entry, key);
         if (func)
@@ -180,7 +194,7 @@ static int DrawEntry__index(lua_State* L) {
                 else if (strequal(key, "Outlined"))
                     lua_pushboolean(L, entry_text->outlined);
                 else if (strequal(key, "OutlineColor"))
-                    pushColor3(L, entry_text->outline_color);
+                    pushColor(L, entry_text->outline_color);
                 else if (strequal(key, "Position"))
                     pushVector2(L, entry_text->position);
                 else
@@ -285,7 +299,7 @@ static int DrawEntry__newindex(lua_State* L) {
             static_cast<DrawEntryText*>(entry)->outline_color.a = alpha;
     } else if (strequal(key, "Color")) {
         auto alpha = entry->color.a;
-        entry->color = *lua_checkcolor3(L, 3);
+        entry->color = *lua_checkcolor(L, 3);
         entry->color.a = alpha;
     } else {
         switch (entry->type) {
@@ -323,7 +337,7 @@ static int DrawEntry__newindex(lua_State* L) {
                 else if (strequal(key, "Outlined"))
                     entry_text->outlined = luaL_checkboolean(L, 3);
                 else if (strequal(key, "OutlineColor")) {
-                    entry_text->outline_color = *lua_checkcolor3(L, 3);
+                    entry_text->outline_color = *lua_checkcolor(L, 3);
                     entry_text->outline_color.a = entry->color.a;
                 } else if (strequal(key, "Position")) {
                     entry_text->position = *lua_checkvector2(L, 3);

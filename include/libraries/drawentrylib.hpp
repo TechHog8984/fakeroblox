@@ -1,6 +1,7 @@
 #pragma once
 
 #include <raylib.h>
+#include <shared_mutex>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,7 @@ namespace fakeroblox {
 class DrawEntry {
 public:
     static std::vector<DrawEntry*> draw_list;
+    static std::shared_mutex draw_list_mutex;
 
     enum Type {
       Line,
@@ -23,6 +25,7 @@ public:
     } type;
     const char* class_name = "[DrawEntry]";
 
+    int ref;
     bool alive = true;
 
     bool visible = false;
@@ -30,6 +33,7 @@ public:
     Color color{255, 255, 255};
 
     void free();
+    void destroy(lua_State* L);
 
     DrawEntry(Type type, const char* class_name);
 };
@@ -63,7 +67,7 @@ public:
     Vector2 position{0, 0};
 
     Vector2 outline_position{1, 1};
-    double outline_text_size = 22;
+    // double outline_text_size = 22;
 
     DrawEntryText();
 
@@ -113,6 +117,8 @@ public:
 
     DrawEntryQuad();
 };
+
+DrawEntry* pushNewDrawEntry(lua_State* L, const char* class_name);
 
 void open_drawentrylib(lua_State* L);
 

@@ -7,27 +7,27 @@
 
 namespace fakeroblox {
 
-typedef struct {
-    std::map<std::string, std::shared_ptr<rbxInstance>> service_map;
-} ServiceProviderUserData;
+std::map<std::string, std::shared_ptr<rbxInstance>> ServiceProvider::service_map;
 
-void constructor(std::shared_ptr<rbxInstance> instance) {
-    instance->userdata = new ServiceProviderUserData;
-}
-void destructor(std::shared_ptr<rbxInstance> instance) {
-    delete static_cast<ServiceProviderUserData*>(instance->userdata);
+void ServiceProvider::registerService(const char* service_name) {
+    if (std::find(rbxClass::valid_services.begin(), rbxClass::valid_services.end(), service_name) != rbxClass::valid_services.end())
+        return;
+
+    rbxClass::valid_services.push_back(service_name);
 }
 
-void createService(lua_State* L, std::shared_ptr<rbxInstance> service_provider, const char* service) {
-    auto userdata = static_cast<ServiceProviderUserData*>(service_provider->userdata);
-    userdata->service_map[service] = newInstance(L, service);
+void ServiceProvider::createService(lua_State* L, std::shared_ptr<rbxInstance> service_provider, const char* service_name) {
+    auto service = newInstance(L, service_name);
+    ServiceProvider::service_map[service_name] = service;
+
+    setInstanceParent(L, service, service_provider);
+    service->parent_locked = true;
 }
-std::shared_ptr<rbxInstance> getService(lua_State* L, std::shared_ptr<rbxInstance> service_provider, const char* service) {
-    auto userdata = static_cast<ServiceProviderUserData*>(service_provider->userdata);
-    if (userdata->service_map.find(service) == userdata->service_map.end())
+std::shared_ptr<rbxInstance> ServiceProvider::getService(lua_State* L, std::shared_ptr<rbxInstance> service_provider, const char* service) {
+    if (ServiceProvider::service_map.find(service) == ServiceProvider::service_map.end())
         createService(L, service_provider, service);
 
-    return userdata->service_map[service];
+    return ServiceProvider::service_map[service];
 }
 
 namespace rbxInstance_ServiceProvider_methods {
@@ -38,11 +38,10 @@ namespace rbxInstance_ServiceProvider_methods {
         if (std::find(rbxClass::valid_services.begin(), rbxClass::valid_services.end(), service) == rbxClass::valid_services.end())
             luaL_errorL(L, "'%s' is not a valid Service name", service);
 
-        auto userdata = static_cast<ServiceProviderUserData*>(instance->userdata);
-        if (userdata->service_map.find(service) == userdata->service_map.end())
+        if (ServiceProvider::service_map.find(service) == ServiceProvider::service_map.end())
             lua_pushnil(L);
         else
-            lua_pushinstance(L, userdata->service_map[service]);
+            lua_pushinstance(L, ServiceProvider::service_map[service]);
 
         return 1;
     }
@@ -53,16 +52,13 @@ namespace rbxInstance_ServiceProvider_methods {
         if (std::find(rbxClass::valid_services.begin(), rbxClass::valid_services.end(), service) == rbxClass::valid_services.end())
             luaL_errorL(L, "'%s' is not a valid Service name", service);
 
-        lua_pushinstance(L, getService(L, instance, service));
+        lua_pushinstance(L, ServiceProvider::getService(L, instance, service));
 
         return 1;
     }
 };
 
 void rbxInstance_ServiceProvider_init(lua_State *L) {
-    rbxClass::class_map["ServiceProvider"]->constructor = constructor;
-    rbxClass::class_map["ServiceProvider"]->destructor = destructor;
-
     rbxClass::class_map["ServiceProvider"]->methods.at("FindService").func = rbxInstance_ServiceProvider_methods::findService;
     rbxClass::class_map["ServiceProvider"]->methods.at("GetService").func = rbxInstance_ServiceProvider_methods::getService;
   

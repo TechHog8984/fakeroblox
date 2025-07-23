@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "imgui.h"
 #include "luaconf.h"
 
 namespace fakeroblox {
@@ -12,6 +13,11 @@ class Console {
 public:
     static Console ScriptConsole;
     static Console TestsConsole;
+
+    static ImVec4 ColorINFO;
+    static ImVec4 ColorWARNING;
+    static ImVec4 ColorERROR;
+    static ImVec4 ColorDEBUG;
 
     class Message {
     public:

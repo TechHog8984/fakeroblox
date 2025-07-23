@@ -38,9 +38,45 @@ namespace fakeroblox {
             inst:Fire(target) \
             task.wait(0.1) \
             assert(upvalue == target) \
-        " },
+        "},
         { .name = "Enum equality", .value = "assert(Enum.KeyCode == Enum.KeyCode) "},
-        { .name = "EnumItem equality", .value = "assert(Enum.KeyCode.A == Enum.KeyCode.A)" }
+        { .name = "EnumItem equality", .value = "assert(Enum.KeyCode.A == Enum.KeyCode.A)" },
+        { .name = "ServiceProvider", .value = "if shared.ignoreserviceprovider then \
+                warn('SKIPPING SERVICEPROVIDER TEST SINCE IT ALREADY RAN') \
+                return \
+            end \
+            shared.ignoreserviceprovider = true \
+            assert(not game:FindService('HeightmapImporterService')) \
+            assert(game:GetService('HeightmapImporterService')) \
+            assert(game:FindService('HeightmapImporterService')) \
+        "},
+        { .name = "UDim2.new", .value = "local obj = UDim2.new() \
+            local function check(a,b,c,d) \
+                assert(obj.X.Scale == a, 'xscale: ' .. a .. ', ' .. b .. ', ' .. c .. ', ' .. d .. ' | ' .. tostring(obj)) \
+                assert(obj.X.Offset == b, 'xoffset: ' .. a .. ', ' .. b .. ', ' .. c .. ', ' .. d .. ' | ' .. tostring(obj)) \
+                assert(obj.Y.Scale == c, 'yscale: ' .. a .. ', ' .. b .. ', ' .. c .. ', ' .. d .. ' | ' .. tostring(obj)) \
+                assert(obj.Y.Offset == d, 'yoffset: ' .. a .. ', ' .. b .. ', ' .. c .. ', ' .. d .. ' | ' .. tostring(obj)) \
+            end \
+            check(0, 0, 0, 0) \
+            obj = UDim2.new(1) \
+            check(1, 0, 0, 0) \
+            obj = UDim2.new(nil, nil, 1) \
+            check(0, 0, 1, 0) \
+            obj = UDim2.new(1, 2, 3, 4) \
+            check(1, 2, 3, 4) \
+            obj = UDim2.new(UDim.new(1, 2)) \
+            check(1, 2, 0, 0) \
+            obj = UDim2.new(nil, UDim.new(1, 2)) \
+            check(0, 0, 0, 0) \
+            obj = UDim2.new(UDim.new(2, 1), UDim.new(4, 3)) \
+            check(2, 1, 4, 3) \
+            obj = UDim2.new(UDim.new('$', 2), 3, 4) \
+            check(0, 2, 0, 0) \
+            obj = UDim2.new(UDim.new(3, 4), 5) \
+            check(3, 4, 0, 0) \
+            obj = UDim2.new(UDim.new('2', 3), newproxy()) \
+            check(2, 3, 0, 0) \
+        "}
     };
     constexpr int test_count = sizeof(test_list) / sizeof(test_list[0]);
 
@@ -59,7 +95,6 @@ namespace fakeroblox {
         std::shared_mutex mutex;
         for (int i = 0; i < test_count; i++) {
             auto& test = test_list[i];
-            Console::TestsConsole.debugf("Spawning test %s...", test.name);
 
             thread_list.emplace_back([&L, &fail, &mutex, &test] () {
                 std::lock_guard<std::shared_mutex> lock(mutex);

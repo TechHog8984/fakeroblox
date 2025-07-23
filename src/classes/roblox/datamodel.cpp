@@ -1,10 +1,12 @@
 #include "classes/roblox/datamodel.hpp"
 #include "classes/roblox/instance.hpp"
+#include "libraries/tasklib.hpp"
 
 #include "http.hpp"
 
 #include "lua.h"
 #include "lualib.h"
+#include <thread>
 
 namespace fakeroblox {
 
@@ -12,16 +14,25 @@ namespace rbxInstance_DataModel_methods {
     static int httpGet(lua_State* L) {
         // FIXME: yield!
         lua_checkinstance(L, 1, "DataModel");
-        const char* url = luaL_checkstring(L, 2);
+        std::string url = luaL_checkstring(L, 2);
+        Task* task = TaskScheduler::getTaskFromThread(L);
 
-        struct MemoryStruct chunk;
-        int res = newGetRequest(url, &chunk);
-        if (res)
-            luaL_errorL(L, "failed to make HTTP request (%d)", res);
+        std::thread t([L, url, task] () {
+            struct MemoryStruct chunk;
+            int res = newGetRequest(url.c_str(), &chunk);
+            if (res)
+                luaL_errorL(L, "failed to make HTTP request (%d)", res);
 
-        lua_pushlstring(L, chunk.memory, chunk.size);
-        return 1;
+            lua_pushlstring(L, chunk.memory, chunk.size);
 
+            task->arg_count = 1;
+            task->timing = TaskTiming { .type = TaskTiming::Instant };
+            TaskScheduler::task_queue.push_back(task);
+        });
+        t.detach();
+
+        task->status = TaskStatus::YIELDING;
+        return lua_yield(L, 0);
     }
 };
 

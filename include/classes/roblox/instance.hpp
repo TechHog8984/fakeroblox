@@ -1,15 +1,19 @@
 #pragma once
 
-#include "classes/roblox/datatypes/rbxscriptsignal.hpp"
-
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <raylib.h>
+#include <shared_mutex>
 #include <string>
 #include <variant>
 #include <vector>
 
+#include "classes/roblox/datatypes/enum.hpp"
+#include "classes/udim.hpp"
+#include "classes/udim2.hpp"
 #include "lua.h"
 
 // Instance is the base class of all objects. We may adapt to Roblox's choice of an Object abstraction in the future.
@@ -62,7 +66,7 @@ public:
     std::map<std::string, std::shared_ptr<rbxProperty>> properties;
     std::map<std::string, rbxMethod> methods;
     std::vector<std::string> events;
-    std::function<void(std::shared_ptr<rbxInstance>)> constructor = nullptr;
+    std::function<void(lua_State* L, std::shared_ptr<rbxInstance> instance)> constructor = nullptr;
     std::function<void(std::shared_ptr<rbxInstance>)> destructor = nullptr;
 
     void newMethod(const char* name, lua_CFunction func, lua_Continuation cont = nullptr) {
@@ -74,7 +78,33 @@ public:
     }
 };
 
-class rbxValue;
+class rbxProperty;
+
+typedef std::variant<
+    bool,
+    int32_t,
+    int64_t,
+    float,
+    double,
+    std::string,
+
+    std::shared_ptr<rbxInstance>,
+    EnumItemWrapper,
+
+    Color,
+    Vector2,
+    Vector3,
+    UDim,
+    UDim2
+> rbxValueVariant;
+
+class rbxValue {
+public:
+    std::shared_ptr<rbxProperty> property;
+
+    bool is_nil;
+    rbxValueVariant value;
+};
 
 class rbxInstance {
 public:
@@ -84,39 +114,52 @@ public:
     std::vector<std::string> events;
     std::vector<std::shared_ptr<rbxInstance>> children;
 
+    std::shared_mutex values_mutex;
+    std::shared_mutex children_mutex;
+
     bool destroyed = false;
+    bool parent_locked = false;
     void* userdata = nullptr;
+
+    std::shared_mutex destroyed_mutex;
+    std::shared_mutex parent_locked_mutex;
 
     rbxInstance(std::shared_ptr<rbxClass> _class);
     ~rbxInstance();
 
-    template<class T>
-    T& getValue(std::string name);
+    template<typename T>
+    T& getValue(std::string name) {
+        std::lock_guard lock(values_mutex);
+        return std::get<T>(values.at(name).value);
+    }
 
-    template<class T>
-    void setValue(std::string name, T value);
+    template<typename T>
+    void setValue(lua_State* L, std::string name, T value, bool dont_report_changed = false) {
+        std::lock_guard lock(values_mutex);
+        std::get<T>(values.at(name).value) = value;
+        if (!dont_report_changed)
+            reportChanged(L, name.c_str());
+    }
 
+    bool isA(rbxClass* target_class);
+    bool isA(const char* class_name);
     int pushEvent(lua_State* L, const char* name);
+    void reportChanged(lua_State* L, const char* property);
 
-    void destroy(lua_State* L);
     std::shared_ptr<rbxInstance> findFirstChild(std::string name);
 };
 
-class rbxProperty;
-
-class rbxValue {
-public:
-    std::shared_ptr<rbxProperty> property;
-
-    bool is_nil;
-    std::variant<bool, int32_t, int64_t, float, double, std::string, std::shared_ptr<rbxInstance>> value;
-};
+void destroyInstance(lua_State* L, std::shared_ptr<rbxInstance> instance);
+void setInstanceParent(lua_State* L, std::shared_ptr<rbxInstance> instance, std::shared_ptr<rbxInstance> new_parent);
 
 class rbxProperty {
 public:
     enum Tags : uint8_t {
-        ReadOnly = 1 << 0,
-        WriteOnly = 1 << 1,
+        Hidden = 1 << 0,
+        Deprecated = 1 << 1,
+        ReadOnly = 1 << 2,
+        WriteOnly = 1 << 3,
+        NotScriptable = 1 << 4
     };
     uint8_t tags = 0;
 

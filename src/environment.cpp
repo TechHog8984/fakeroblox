@@ -37,7 +37,7 @@ static int fr_loadstring(lua_State* L) {
 
 void open_fakeroblox_environment(lua_State *L) {
     // methodlookup
-    newweaktable(L);
+    lua_newtable(L);
     lua_setfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
 
     // string list

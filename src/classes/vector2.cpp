@@ -10,9 +10,9 @@
 namespace fakeroblox {
 
 int pushVector2(lua_State* L, double x, double y) {
-    Vector2* v2 = static_cast<Vector2*>(lua_newuserdata(L, sizeof(Vector2)));
-    v2->x = x;
-    v2->y = y;
+    Vector2* vector2 = static_cast<Vector2*>(lua_newuserdata(L, sizeof(Vector2)));
+    vector2->x = x;
+    vector2->y = y;
 
     luaL_getmetatable(L, "Vector2");
     lua_setmetatable(L, -2);
