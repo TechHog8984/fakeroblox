@@ -22,7 +22,7 @@ void Console::clear() {
 }
 
 void Console::renderMessages() {
-    std::lock_guard lock(mutex);
+    std::shared_lock lock(mutex);
     for (size_t i = 0; i < message_count; i++) {
         bool skip = false;
         auto& message = messages[i];

@@ -88,6 +88,7 @@ typedef std::variant<
     double,
     std::string,
 
+    // TODO: this should most likely be a weak_ptr
     std::shared_ptr<rbxInstance>,
     EnumItemWrapper,
 
@@ -106,8 +107,13 @@ public:
     rbxValueVariant value;
 };
 
+std::vector<std::weak_ptr<rbxInstance>> getNilInstances();
+
 class rbxInstance {
 public:
+    static std::vector<std::weak_ptr<rbxInstance>> instance_list;
+    static std::shared_mutex instance_list_mutex;
+
     std::shared_ptr<rbxClass> _class;
     std::map<std::string, rbxValue> values;
     std::map<std::string, rbxMethod> methods;
@@ -135,8 +141,10 @@ public:
 
     template<typename T>
     void setValue(lua_State* L, std::string name, T value, bool dont_report_changed = false) {
-        std::lock_guard lock(values_mutex);
+        std::shared_lock lock(values_mutex);
         std::get<T>(values.at(name).value) = value;
+        lock.unlock();
+
         if (!dont_report_changed)
             reportChanged(L, name.c_str());
     }
@@ -150,7 +158,7 @@ public:
 };
 
 void destroyInstance(lua_State* L, std::shared_ptr<rbxInstance> instance, bool dont_remove_from_old_parent_children = false);
-void setInstanceParent(lua_State* L, std::shared_ptr<rbxInstance> instance, std::shared_ptr<rbxInstance> new_parent, bool dont_remove_from_old_parent_children = false);
+void setInstanceParent(lua_State* L, std::shared_ptr<rbxInstance> instance, std::shared_ptr<rbxInstance> new_parent, bool dont_remove_from_old_parent_children = false, bool dont_set_value = false);
 
 class rbxProperty {
 public:
@@ -182,7 +190,7 @@ std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int narg, const char*
 void rbxInstanceSetup(lua_State* L, std::string api_jump);
 void rbxInstanceCleanup(lua_State* L);
 
-std::shared_ptr<rbxInstance> newInstance(lua_State* L, const char* class_name);
+std::shared_ptr<rbxInstance> newInstance(lua_State* L, const char* class_name, std::shared_ptr<rbxInstance> parent = nullptr);
 int lua_pushinstance(lua_State* L, std::shared_ptr<rbxInstance> instance);
 
 namespace rbxInstance_datatype {

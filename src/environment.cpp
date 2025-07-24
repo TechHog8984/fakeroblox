@@ -3,6 +3,7 @@
 
 #include <string>
 
+#include "lua.h"
 #include "lualib.h"
 #include "Luau/Compiler.h"
 
@@ -35,6 +36,15 @@ static int fr_loadstring(lua_State* L) {
     return 2;          // return nil plus error message
 }
 
+static int fr_gcstep(lua_State* L) {
+    lua_gc(L, LUA_GCSTEP, 0);
+    return 0;
+}
+static int fr_gcfull(lua_State* L) {
+    lua_gc(L, LUA_GCCOLLECT, 0);
+    return 0;
+}
+
 void open_fakeroblox_environment(lua_State *L) {
     // methodlookup
     lua_newtable(L);
@@ -51,6 +61,8 @@ void open_fakeroblox_environment(lua_State *L) {
 
     expose(getreg)
     expose(loadstring)
+    expose(gcstep);
+    expose(gcfull);
 }
 
 }; // namespace fakeroblox

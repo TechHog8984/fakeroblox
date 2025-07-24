@@ -11,33 +11,34 @@ namespace fakeroblox {
 
 std::shared_ptr<rbxInstance> game;
 
-std::shared_ptr<rbxInstance> selected_instance;
+std::weak_ptr<rbxInstance> selected_instance;
 std::queue<std::shared_ptr<rbxInstance>> destroy_queue;
 
 void UI_InstanceExplorer_init(std::shared_ptr<rbxInstance> datamodel) {
     game = datamodel;
 }
 
+// options
+static bool show_address_near_name = false;
+static bool show_input_objects = false; // TODO: we should have a designated filter option where you can search classnames or something
+
+void renderInstance(lua_State* L, std::shared_ptr<rbxInstance>& instance);
+
 static ImGuiTreeNodeFlags base_flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth;
-void renderInstance(lua_State* L, std::shared_ptr<rbxInstance>& instance) {
-    std::lock_guard instance_children_lock(instance->children_mutex);
-
-    auto& object_name = instance->getValue<std::string>(PROP_INSTANCE_NAME);
-    auto children_count = instance->children.size();
-
-    ImGui::PushID(instance.get());
+void renderNode(lua_State* L, std::shared_ptr<rbxInstance> instance, std::vector<std::shared_ptr<rbxInstance>>& children, std::string name) {
+    auto children_count = children.size();
 
     ImGuiTreeNodeFlags flags = base_flags;
-    if (selected_instance && instance == selected_instance)
+    if (instance && !selected_instance.expired() && instance == selected_instance.lock())
         flags |= ImGuiTreeNodeFlags_Selected;
     if (!children_count)
         flags |= ImGuiTreeNodeFlags_Leaf;
 
-    bool open = ImGui::TreeNodeEx("##node", flags, "%.*s", static_cast<int>(object_name.size()), object_name.c_str());
-    if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
+    bool open = ImGui::TreeNodeEx("##node", flags, "%.*s", static_cast<int>(name.size()), name.c_str());
+    if (instance && ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
         selected_instance = instance;
 
-    if (ImGui::BeginPopupContextItem()) {
+    if (instance && ImGui::BeginPopupContextItem()) {
         const bool parent_locked = instance->parent_locked;
 
         if (parent_locked)
@@ -54,9 +55,26 @@ void renderInstance(lua_State* L, std::shared_ptr<rbxInstance>& instance) {
 
     if (open) {
         for (unsigned int ichild = 0; ichild < children_count; ichild++)
-            renderInstance(L, instance->children[ichild]);
+            renderInstance(L, children[ichild]);
         ImGui::TreePop();
     }
+}
+void renderInstance(lua_State* L, std::shared_ptr<rbxInstance>& instance) {
+    if (!show_input_objects && instance->isA("InputObject"))
+        return;
+
+    std::shared_lock instance_children_lock(instance->children_mutex);
+
+    auto object_name = instance->getValue<std::string>(PROP_INSTANCE_NAME);
+    if (show_address_near_name) {
+        char buf[50];
+        snprintf(buf, 50, " (%p)", instance.get());
+        object_name.append(buf);
+    }
+
+    ImGui::PushID(instance.get());
+
+    renderNode(L, instance, instance->children, object_name);
 
     ImGui::PopID();
 }
@@ -127,25 +145,56 @@ void renderPropertyValue(rbxProperty* property, rbxValueVariant& value) {
 
 // TODO: lua api to get/set selected instance, focus instance, etc
 void UI_InstanceExplorer_render(lua_State *L) {
+    if (ImGui::BeginMenuBar()) {
+        if (ImGui::BeginMenu("Options")) {
+            ImGui::MenuItem("Show Address Near Instance Name", nullptr, &show_address_near_name);
+            ImGui::MenuItem("Show Input Objects", nullptr, &show_input_objects);
+
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenuBar();
+    }
+
     ImGui::BeginChild("Explorer", ImVec2{0, ImGui::GetContentRegionAvail().y / 2.f}, ImGuiChildFlags_None);
 
-    std::shared_lock game_children_lock(game->children_mutex);
+    {
+        std::shared_lock game_children_lock(game->children_mutex);
 
-    for (unsigned int ichild = 0; ichild < game->children.size(); ichild++)
-        renderInstance(L, game->children[ichild]);
+        for (unsigned int ichild = 0; ichild < game->children.size(); ichild++)
+            renderInstance(L, game->children[ichild]);
 
-    game_children_lock.unlock();
+        ImGui::SeparatorText("Psuedo Parents");
+
+        ImGui::PushID("Nil Instances");
+
+        auto nil_instances = getNilInstances();
+        std::vector<std::shared_ptr<rbxInstance>> shared_nil_instances;
+        shared_nil_instances.reserve(nil_instances.size());
+
+        for (size_t i = 0; i < nil_instances.size(); i++)
+            if (auto instance = nil_instances[i].lock())
+                shared_nil_instances.push_back(instance);
+
+        renderNode(L, nullptr, shared_nil_instances, "Nil Instances");
+
+        ImGui::PopID();
+    }
 
     while (!destroy_queue.empty()) {
         auto& instance = destroy_queue.front();
 
-        if (selected_instance && selected_instance == instance)
-            selected_instance = nullptr;
+        if (auto selected = selected_instance.lock())
+            if (selected == instance)
+                selected_instance.reset();
 
         destroyInstance(L, instance);
 
         destroy_queue.pop();
     }
+
+    if (auto selected = selected_instance.lock())
+        if (selected->destroyed)
+            selected_instance.reset();
 
     ImGui::EndChild();
 
@@ -153,15 +202,15 @@ void UI_InstanceExplorer_render(lua_State *L) {
 
     const auto& rbxinstance_parent_property = rbxClass::class_map["Instance"]->properties["Parent"];
 
-    if (selected_instance) {
-        auto selected_instance_name = selected_instance->getValue<std::string>(PROP_INSTANCE_NAME);
-        ImGui::Text("%.*s", static_cast<int>(selected_instance_name.size()), selected_instance_name.c_str());
+    if (auto selected = selected_instance.lock()) {
+        auto selected_name = selected->getValue<std::string>(PROP_INSTANCE_NAME);
+        ImGui::Text("%.*s", static_cast<int>(selected_name.size()), selected_name.c_str());
 
         ImGui::SeparatorText("Properties");
         if (ImGui::BeginTable("Properties##table", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
-            std::lock_guard values_lock(selected_instance->values_mutex);
+            std::lock_guard values_lock(selected->values_mutex);
 
-            for (auto& value_pair : selected_instance->values) {
+            for (auto& value_pair : selected->values) {
                 auto& property = value_pair.second.property;
                 if (property->tags & rbxProperty::Hidden || property->tags & rbxProperty::Deprecated
                     || property->tags & rbxProperty::WriteOnly || property->tags & rbxProperty::NotScriptable
@@ -174,7 +223,7 @@ void UI_InstanceExplorer_render(lua_State *L) {
                 ImGui::TableNextColumn();
 
                 const bool read_only = property->tags & rbxProperty::ReadOnly;
-                const bool parent_locked = property == rbxinstance_parent_property && selected_instance->parent_locked;
+                const bool parent_locked = property == rbxinstance_parent_property && selected->parent_locked;
 
                 const bool disabled = read_only || parent_locked;
                 if (disabled)

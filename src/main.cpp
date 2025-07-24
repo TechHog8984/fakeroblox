@@ -213,11 +213,15 @@ int main(int argc, char** argv) {
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("Window")) {
                 ImGui::MenuItem("Show FPS", nullptr, &show_fps);
+                ImGui::Separator();
                 ImGui::MenuItem("Script Editor", nullptr, &menu_editor_open);
                 ImGui::MenuItem("Script Console", nullptr, &menu_console_open);
+                ImGui::Separator();
                 ImGui::MenuItem("Tests", nullptr, &menu_tests_open);
+                ImGui::Separator();
                 ImGui::MenuItem("Thread List", nullptr, &menu_thread_list_open);
                 ImGui::MenuItem("DrawEntry List", nullptr, &menu_drawentry_list_open);
+                ImGui::Separator();
                 ImGui::MenuItem("Instance Explorer", nullptr, &menu_instance_explorer_open);
                 ImGui::MenuItem("Function Explorer", nullptr, &menu_function_explorer_open);
 
@@ -396,7 +400,7 @@ int main(int argc, char** argv) {
             ImGui::End();
         }
         if (menu_instance_explorer_open) {
-            if (ImGui::Begin("Instance Explorer", &menu_instance_explorer_open))
+            if (ImGui::Begin("Instance Explorer", &menu_instance_explorer_open, ImGuiWindowFlags_MenuBar))
                 UI_InstanceExplorer_render(appL);
             ImGui::End();
         }

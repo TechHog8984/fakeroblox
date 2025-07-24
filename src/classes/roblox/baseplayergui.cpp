@@ -3,10 +3,12 @@
 #include "classes/roblox/instance.hpp"
 #include "classes/udim2.hpp"
 
+#include "console.hpp"
 #include "raylib.h"
 #include "rlgl.h"
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cmath>
 #include <mutex>
@@ -16,7 +18,7 @@ namespace fakeroblox {
 std::vector<std::shared_ptr<rbxInstance>> gui_storage_list;
 
 // modification of DrawRectanglePro that doesn't fill and allows thickness
-void DrawRectangleLinesPro(Rectangle rec, Vector2 origin, float rotation, float thickness, Color color) {
+std::array<Vector2, 4> getRectangleLinesPro(Rectangle rec, Vector2 origin, float rotation) {
     // FIXME: this leaves gaps in the corners
 
     Vector2 topLeft = { 0 };
@@ -53,11 +55,24 @@ void DrawRectangleLinesPro(Rectangle rec, Vector2 origin, float rotation, float 
         bottomRight.y = y + (dx + rec.width)*sinRotation + (dy + rec.height)*cosRotation;
     }
 
-    DrawLineEx(topLeft, topRight, thickness, color);
-    DrawLineEx(topRight, bottomRight, thickness, color);
-    DrawLineEx(bottomRight, bottomLeft, thickness, color);
-    DrawLineEx(bottomLeft, topLeft, thickness, color);
+
+    return {topLeft, topRight, bottomRight, bottomLeft};
 }
+void DrawRectangleLinesPro(Rectangle rec, Vector2 origin, float rotation, float thickness, Color color) {
+    auto lines = getRectangleLinesPro(rec, origin, rotation);
+
+    DrawLineEx(lines[0], lines[1], thickness, color);
+    DrawLineEx(lines[1], lines[2], thickness, color);
+    DrawLineEx(lines[2], lines[3], thickness, color);
+    DrawLineEx(lines[3], lines[0], thickness, color);
+}
+
+std::shared_ptr<rbxInstance> old_clickable_instance;
+std::shared_ptr<rbxInstance> clickable_instance;
+
+std::vector<std::shared_ptr<rbxInstance>> mouse_enter_list;
+std::vector<std::shared_ptr<rbxInstance>> mouse_leave_list;
+std::map<rbxInstance*, bool> mouse_over_map;
 
 // NOTE: expects Parent
 static bool isStorageChild(std::shared_ptr<rbxInstance> instance) {
@@ -66,8 +81,8 @@ static bool isStorageChild(std::shared_ptr<rbxInstance> instance) {
 
     return std::find(gui_storage_list.begin(), gui_storage_list.end(), parent) != gui_storage_list.end();
 }
-void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> object) {
-    auto parent = object->getValue<std::shared_ptr<rbxInstance>>(PROP_INSTANCE_PARENT);
+void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> instance, Vector2 mouse) {
+    auto parent = instance->getValue<std::shared_ptr<rbxInstance>>(PROP_INSTANCE_PARENT);
     const bool is_storage_child = isStorageChild(parent);
 
     // TODO: separate function for pos&size calculations that only get called on parent changed?
@@ -76,9 +91,9 @@ void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> object) {
     auto& parent_absolute_size = is_storage_child ? rbxCamera::screen_size : parent->getValue<Vector2>("AbsoluteSize");
     auto parent_absolute_rotation = is_storage_child ? 0.0f : parent->getValue<float>("AbsoluteRotation");
 
-    auto& position = object->getValue<UDim2>("Position");
-    auto& size = object->getValue<UDim2>("Size");
-    auto rotation = object->getValue<float>("Rotation");
+    auto& position = instance->getValue<UDim2>("Position");
+    auto& size = instance->getValue<UDim2>("Size");
+    auto rotation = instance->getValue<float>("Rotation");
 
     auto position_x_scale = position.x.scale;
     auto position_y_scale = position.y.scale;
@@ -99,32 +114,48 @@ void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> object) {
 
     float absolute_rotation = parent_absolute_rotation + rotation;
 
-    object->setValue<Vector2>(L, "AbsolutePosition", absolute_position);
-    object->setValue<Vector2>(L, "AbsoluteSize", absolute_size);
-    object->setValue<float>(L, "AbsoluteRotation", absolute_rotation);
+    instance->setValue<Vector2>(L, "AbsolutePosition", absolute_position);
+    instance->setValue<Vector2>(L, "AbsoluteSize", absolute_size);
+    instance->setValue<float>(L, "AbsoluteRotation", absolute_rotation);
 
-    if (!object->getValue<bool>("Visible"))
+    if (!instance->getValue<bool>("Visible"))
         return;
 
-    auto backgroundcolor = object->getValue<Color>("BackgroundColor3");
-    backgroundcolor.a = (1 - object->getValue<float>("BackgroundTransparency")) * 255;
+    auto background_color = instance->getValue<Color>("BackgroundColor3");
+    background_color.a = (1 - instance->getValue<float>("BackgroundTransparency")) * 255;
 
-    Rectangle background_rect{
-        .x = absolute_position.x * 2,
-        .y = absolute_position.y * 2,
+    Rectangle shape_rect{
+        .x = absolute_position.x,
+        .y = absolute_position.y,
         .width = absolute_size.x,
         .height = absolute_size.y,
     };
-    // TODO: rotation origin still seems a bit off
-    DrawRectanglePro(background_rect, absolute_position, absolute_rotation, backgroundcolor);
+    Vector2 shape_origin{absolute_size.x / 2.f, absolute_size.y / 2.f};
+    DrawRectanglePro(shape_rect, shape_origin, absolute_rotation, background_color);
 
-    auto border_size = object->getValue<int>("BorderSizePixel");
+    auto border_size = instance->getValue<int>("BorderSizePixel");
     if (border_size) {
-        auto border_color = object->getValue<Color>("BorderColor3");
-        border_color.a = backgroundcolor.a;
+        auto border_color = instance->getValue<Color>("BorderColor3");
+        border_color.a = background_color.a;
 
-        DrawRectangleLinesPro(background_rect, absolute_position, absolute_rotation, border_size, border_color);
+        DrawRectangleLinesPro(shape_rect, shape_origin, absolute_rotation, border_size, border_color);
     }
+
+    auto shape_lines = getRectangleLinesPro(shape_rect, absolute_position, absolute_rotation);
+    const bool is_mouse_over = CheckCollisionPointPoly(mouse, shape_lines.data(), shape_lines.size());
+
+    auto& mouse_over_state = mouse_over_map[instance.get()];
+
+    if (is_mouse_over != mouse_over_state) {
+        if (is_mouse_over) {
+            mouse_enter_list.push_back(instance);
+            clickable_instance = instance;
+        } else {
+            mouse_leave_list.push_back(instance);
+        }
+    }
+
+    mouse_over_state = is_mouse_over;
 }
 
 std::vector<std::shared_ptr<rbxInstance>> render_list;
@@ -149,17 +180,37 @@ void contributeToRenderList(std::shared_ptr<rbxInstance> instance, bool is_stora
 }
 
 void rbxInstance_BasePlayerGui_process(lua_State *L) {
+    clickable_instance.reset();
+
     render_list.clear();
 
-    for (unsigned int i = 0; i < gui_storage_list.size(); i++)
+    mouse_enter_list.clear();
+    mouse_leave_list.clear();
+
+    for (size_t i = 0; i < gui_storage_list.size(); i++)
         contributeToRenderList(gui_storage_list[i], true);
 
     std::sort(render_list.begin(), render_list.end(), [] (std::shared_ptr<rbxInstance> a, std::shared_ptr<rbxInstance> b) {
         return a->getValue<int>("ZIndex") < b->getValue<int>("ZIndex");
     });
 
-    for (unsigned int i = 0; i < render_list.size(); i++)
-        renderGuiObject(L, render_list[i]);
+    for (size_t i = 0; i < render_list.size(); i++)
+        renderGuiObject(L, render_list[i], GetMousePosition());
+
+    for (size_t i = 0; i < mouse_enter_list.size(); i++)
+        // TODO: mouseenter and inputbegan signals
+        Console::ScriptConsole.debugf("mouse enter: %p", mouse_enter_list[i].get());
+
+    for (size_t i = 0; i < mouse_leave_list.size(); i++)
+        // TODO: mouseleave and inputbegan signals
+        Console::ScriptConsole.debugf("mouse leave: %p", mouse_leave_list[i].get());
+
+    if (clickable_instance && !(old_clickable_instance && clickable_instance == old_clickable_instance)) {
+        // TODO: process mouse down events on this instance specifically
+        Console::ScriptConsole.debugf("allow clicks on: %p", clickable_instance.get());
+    }
+
+    old_clickable_instance.reset();
 }
 
 void rbxInstance_BasePlayerGui_init(lua_State *L, std::initializer_list<std::shared_ptr<rbxInstance>> initial_gui_storage_list) {

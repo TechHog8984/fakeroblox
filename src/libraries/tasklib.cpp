@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <mutex>
 #include <shared_mutex>
 #include <optional>
 #include <unordered_map>
@@ -68,7 +69,7 @@ typedef std::variant<bool, std::string> ThreadResumeResult;
 ThreadResumeResult resumeThread(Task* task);
 
 void TaskScheduler::resumeTask(Task* task) {
-    std::shared_lock task_queue_lock(task_queue_mutex);
+    std::unique_lock task_queue_lock(task_queue_mutex);
     task_queue.erase(std::find(task_queue.begin(), task_queue.end(), task));
     task_queue_lock.unlock();
 
