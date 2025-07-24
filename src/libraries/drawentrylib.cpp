@@ -507,17 +507,22 @@ void DrawEntry::render() {
             }
             case DrawEntry::Text: {
                 DrawEntryText* entry_text = static_cast<DrawEntryText*>(entry);
+                auto position = entry_text->position;
+                if (entry_text->centered) {
+                    position.x -= entry_text->text_bounds.x / 2.f;
+                    position.y -= entry_text->text_bounds.y / 2.f;
+                }
                 if (entry_text->outlined) {
                     // top
-                    DrawTextEx(entry_text->font, entry_text->text.c_str(), { .x = entry_text->position.x, .y = entry_text->position.y - 1 }, entry_text->text_size, 0, entry_text->outline_color);
+                    DrawTextEx(entry_text->font, entry_text->text.c_str(), { .x = position.x, .y = position.y - 1 }, entry_text->text_size, 0, entry_text->outline_color);
                     // right
-                    DrawTextEx(entry_text->font, entry_text->text.c_str(), { .x = entry_text->position.x + 1, .y = entry_text->position.y }, entry_text->text_size, 0, entry_text->outline_color);
+                    DrawTextEx(entry_text->font, entry_text->text.c_str(), { .x = position.x + 1, .y = position.y }, entry_text->text_size, 0, entry_text->outline_color);
                     // bottom
-                    DrawTextEx(entry_text->font, entry_text->text.c_str(), { .x = entry_text->position.x - 1, .y = entry_text->position.y + 1 }, entry_text->text_size, 0, entry_text->outline_color);
+                    DrawTextEx(entry_text->font, entry_text->text.c_str(), { .x = position.x - 1, .y = position.y + 1 }, entry_text->text_size, 0, entry_text->outline_color);
                     // left
-                    DrawTextEx(entry_text->font, entry_text->text.c_str(), { .x = entry_text->position.x - 1, .y = entry_text->position.y }, entry_text->text_size, 0, entry_text->outline_color);
+                    DrawTextEx(entry_text->font, entry_text->text.c_str(), { .x = position.x - 1, .y = position.y }, entry_text->text_size, 0, entry_text->outline_color);
                 }
-                DrawTextEx(entry_text->font, entry_text->text.c_str(), entry_text->position, entry_text->text_size, 0, color);
+                DrawTextEx(entry_text->font, entry_text->text.c_str(), position, entry_text->text_size, 0, color);
                 break;
             }
             case DrawEntry::Circle: {

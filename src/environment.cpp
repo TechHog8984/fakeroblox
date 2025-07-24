@@ -23,7 +23,7 @@ static int fr_getreg(lua_State* L) {
 static int fr_loadstring(lua_State* L) {
     size_t l = 0;
     const char* s = luaL_checklstring(L, 1, &l);
-    const char* chunkname = luaL_optstring(L, 2, s);
+    const char* chunkname = luaL_optstring(L, 2, "");
 
     lua_setsafeenv(L, LUA_ENVIRONINDEX, false);
 
