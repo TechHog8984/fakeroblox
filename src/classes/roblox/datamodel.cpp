@@ -13,7 +13,6 @@ namespace fakeroblox {
 
 namespace rbxInstance_DataModel_methods {
     static int httpGet(lua_State* L) {
-        // FIXME: yield!
         lua_checkinstance(L, 1, "DataModel");
         std::string url = luaL_checkstring(L, 2);
         Task* task = TaskScheduler::getTaskFromThread(L);
