@@ -1,7 +1,7 @@
 #!/bin/bash
 
-if [ -d ".build_success" ]; then
-    rm .build_success
+if [ -f ".test_success" ]; then
+    rm .test_success
 fi
 
 # clear && ./build.sh --release --nostatic || exit 1
