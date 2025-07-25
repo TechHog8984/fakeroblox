@@ -1,9 +1,12 @@
 #include "classes/roblox/baseplayergui.hpp"
 #include "classes/roblox/camera.hpp"
+#include "classes/roblox/datatypes/rbxscriptsignal.hpp"
 #include "classes/roblox/instance.hpp"
+#include "classes/roblox/userinputservice.hpp"
 #include "classes/udim2.hpp"
 
-#include "console.hpp"
+#include "common.hpp"
+
 #include "raylib.h"
 #include "rlgl.h"
 
@@ -58,17 +61,33 @@ std::array<Vector2, 4> getRectangleLinesPro(Rectangle rec, Vector2 origin, float
 
     return {topLeft, topRight, bottomRight, bottomLeft};
 }
-void DrawRectangleLinesPro(Rectangle rec, Vector2 origin, float rotation, float thickness, Color color) {
-    auto lines = getRectangleLinesPro(rec, origin, rotation);
+void DrawRotatedRectangleLines(Vector2 position, Vector2 size, float rotation, float thickness, Color color) {
+    Vector2 center = { position.x + size.x / 2.0f, position.y + size.y / 2.0f };
 
-    DrawLineEx(lines[0], lines[1], thickness, color);
-    DrawLineEx(lines[1], lines[2], thickness, color);
-    DrawLineEx(lines[2], lines[3], thickness, color);
-    DrawLineEx(lines[3], lines[0], thickness, color);
+    rlPushMatrix();
+    rlTranslatef(center.x, center.y, 0.0f);
+    rlRotatef(rotation, 0, 0, 1);
+    rlTranslatef(-center.x, -center.y, 0.0f);
+
+    Rectangle rect = { position.x, position.y, size.x, size.y };
+    DrawRectangleLinesEx(rect, thickness, color);
+
+    rlPopMatrix();
 }
 
-std::shared_ptr<rbxInstance> old_clickable_instance;
-std::shared_ptr<rbxInstance> clickable_instance;
+std::weak_ptr<rbxInstance> clickable_instance;
+std::weak_ptr<rbxInstance> next_clickable_instance;
+
+std::weak_ptr<rbxInstance> getClickableGuiObject() {
+    return clickable_instance;
+}
+
+std::vector<std::weak_ptr<rbxInstance>> gui_objects_hovered;
+std::vector<std::weak_ptr<rbxInstance>> next_gui_objects_hovered;
+
+std::vector<std::weak_ptr<rbxInstance>> getGuiObjectsHovered() {
+    return gui_objects_hovered;
+}
 
 std::vector<std::shared_ptr<rbxInstance>> mouse_enter_list;
 std::vector<std::shared_ptr<rbxInstance>> mouse_leave_list;
@@ -125,8 +144,8 @@ void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> instance, Vector
     background_color.a = (1 - instance->getValue<float>("BackgroundTransparency")) * 255;
 
     Rectangle shape_rect{
-        .x = absolute_position.x,
-        .y = absolute_position.y,
+        .x = absolute_position.x + absolute_size.x / 2.f,
+        .y = absolute_position.y + absolute_size.y / 2.f,
         .width = absolute_size.x,
         .height = absolute_size.y,
     };
@@ -138,22 +157,22 @@ void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> instance, Vector
         auto border_color = instance->getValue<Color>("BorderColor3");
         border_color.a = background_color.a;
 
-        DrawRectangleLinesPro(shape_rect, shape_origin, absolute_rotation, border_size, border_color);
+        DrawRotatedRectangleLines(absolute_position, absolute_size, rotation, border_size, border_color);
     }
 
-    auto shape_lines = getRectangleLinesPro(shape_rect, absolute_position, absolute_rotation);
+    auto shape_lines = getRectangleLinesPro(shape_rect, shape_origin, absolute_rotation);
     const bool is_mouse_over = CheckCollisionPointPoly(mouse, shape_lines.data(), shape_lines.size());
 
     auto& mouse_over_state = mouse_over_map[instance.get()];
 
-    if (is_mouse_over != mouse_over_state) {
-        if (is_mouse_over) {
-            mouse_enter_list.push_back(instance);
-            clickable_instance = instance;
-        } else {
-            mouse_leave_list.push_back(instance);
-        }
+    if (is_mouse_over) {
+        next_gui_objects_hovered.push_back(instance);
+        if (instance->isA("GuiButton"))
+            next_clickable_instance = instance;
     }
+
+    if (is_mouse_over != mouse_over_state)
+        (is_mouse_over ? mouse_enter_list : mouse_leave_list).push_back(instance);
 
     mouse_over_state = is_mouse_over;
 }
@@ -179,13 +198,26 @@ void contributeToRenderList(std::shared_ptr<rbxInstance> instance, bool is_stora
         contributeToRenderList(instance->children[i]);
 }
 
-void rbxInstance_BasePlayerGui_process(lua_State *L) {
-    clickable_instance.reset();
+void fireMouseMovementSignal(lua_State* L, Vector2& mouse, std::shared_ptr<rbxInstance> instance, const char* event) {
+    pushFunctionFromLookup(L, fireRBXScriptSignal);
+    instance->pushEvent(L, event);
 
-    render_list.clear();
+    lua_pushnumber(L, mouse.x);
+    lua_pushnumber(L, mouse.y);
+
+    lua_call(L, 3, 0);
+}
+
+void rbxInstance_BasePlayerGui_process(lua_State *L) {
+    next_clickable_instance.reset();
+    next_gui_objects_hovered.clear();
 
     mouse_enter_list.clear();
     mouse_leave_list.clear();
+
+    // generate render list
+
+    render_list.clear();
 
     for (size_t i = 0; i < gui_storage_list.size(); i++)
         contributeToRenderList(gui_storage_list[i], true);
@@ -194,23 +226,28 @@ void rbxInstance_BasePlayerGui_process(lua_State *L) {
         return a->getValue<int>("ZIndex") < b->getValue<int>("ZIndex");
     });
 
+    auto mouse = GetMousePosition();
+
+    // render objects
     for (size_t i = 0; i < render_list.size(); i++)
-        renderGuiObject(L, render_list[i], GetMousePosition());
+        renderGuiObject(L, render_list[i], mouse);
 
-    for (size_t i = 0; i < mouse_enter_list.size(); i++)
-        // TODO: mouseenter and inputbegan signals
-        Console::ScriptConsole.debugf("mouse enter: %p", mouse_enter_list[i].get());
+    clickable_instance = next_clickable_instance;
+    gui_objects_hovered = next_gui_objects_hovered;
 
-    for (size_t i = 0; i < mouse_leave_list.size(); i++)
-        // TODO: mouseleave and inputbegan signals
-        Console::ScriptConsole.debugf("mouse leave: %p", mouse_leave_list[i].get());
+    // handle some signals (the rest are handled in UserInputService)
 
-    if (clickable_instance && !(old_clickable_instance && clickable_instance == old_clickable_instance)) {
-        // TODO: process mouse down events on this instance specifically
-        Console::ScriptConsole.debugf("allow clicks on: %p", clickable_instance.get());
+    for (size_t i = 0; i < mouse_enter_list.size(); i++) {
+        auto& instance = mouse_enter_list[i];
+        fireMouseMovementSignal(L, mouse, instance, "MouseEnter");
+        UserInputService::signalMouseMovement(instance, InputBegan);
     }
 
-    old_clickable_instance.reset();
+    for (size_t i = 0; i < mouse_leave_list.size(); i++) {
+        auto& instance = mouse_leave_list[i];
+        fireMouseMovementSignal(L, mouse, instance, "MouseLeave");
+        UserInputService::signalMouseMovement(instance, InputEnded);
+    }
 }
 
 void rbxInstance_BasePlayerGui_init(lua_State *L, std::initializer_list<std::shared_ptr<rbxInstance>> initial_gui_storage_list) {

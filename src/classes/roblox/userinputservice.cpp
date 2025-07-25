@@ -1,7 +1,7 @@
 #include "classes/roblox/userinputservice.hpp"
+#include "classes/roblox/baseplayergui.hpp"
 #include "classes/roblox/datatypes/enum.hpp"
 #include "classes/roblox/datatypes/rbxscriptsignal.hpp"
-#include "classes/roblox/instance.hpp"
 #include "classes/roblox/serviceprovider.hpp"
 #include "libraries/tasklib.hpp"
 
@@ -15,11 +15,16 @@
 
 namespace fakeroblox {
 
-void userInputServiceFire(lua_State* L, const char* event, std::shared_ptr<rbxInstance> input_object, bool game_processed) {
-    std::shared_ptr<rbxInstance> uis = ServiceProvider::service_map.at("UserInputService");
-
+void genericFire(lua_State* L, std::shared_ptr<rbxInstance> instance, const char* event) {
     pushFunctionFromLookup(L, fireRBXScriptSignal);
-    uis->pushEvent(L, event);
+    instance->pushEvent(L, event);
+
+    lua_call(L, 1, 0);
+}
+
+void genericFireInputObject(lua_State* L, std::shared_ptr<rbxInstance> instance, const char* event, std::shared_ptr<rbxInstance> input_object, bool game_processed) {
+    pushFunctionFromLookup(L, fireRBXScriptSignal);
+    instance->pushEvent(L, event);
 
     lua_pushinstance(L, input_object);
     lua_pushboolean(L, game_processed);
@@ -183,9 +188,18 @@ const char* MOUSE_BUTTON_MAP[] = {
     "MouseButton3"
 };
 
+const char* INPUT_TYPE_MAP[] = {
+    "InputBegan",
+    "InputChanged",
+    "InputEnded",
+};
+
 struct InputEventMouseClick {
     unsigned int mouse;
     bool down;
+};
+struct InputEventMouseMovement {
+    InputType signal;
 };
 struct InputEventKeyboard {
     const char* keycode;
@@ -199,8 +213,11 @@ struct InputEvent {
         Keyboard
     } type;
 
+    std::weak_ptr<rbxInstance> instance;
+
     union {
         InputEventMouseClick mouse_click;
+        InputEventMouseMovement mouse_movement;
         InputEventKeyboard keyboard;
     };
 };
@@ -214,7 +231,20 @@ void pushInputEvent(InputEvent& event) {
     input_event_queue.push(event);
 }
 
+void UserInputService::signalMouseMovement(std::shared_ptr<rbxInstance> instance, InputType type) {
+    InputEvent event = {
+        .type = InputEvent::MouseMovement,
+        .instance = instance,
+        .mouse_movement = {
+            .signal = type
+        }
+    };
+    pushInputEvent(event);
+}
+
 int global_mouse_wheel = 0;
+bool UserInputService::is_window_focused = false;
+
 void UserInputService::process(lua_State *L) {
     const Vector2 mouse_delta = GetMouseDelta();
     const Vector2 mouse_position = GetMousePosition();
@@ -222,6 +252,11 @@ void UserInputService::process(lua_State *L) {
 
     const int mouse_wheel_y = mouse_wheel_vector.y;
     const int mouse_wheel = mouse_wheel_y ? (mouse_wheel_y > 0 ? 1 : -1) : 0;
+
+    const bool is_window_focused = IsWindowFocused();
+    if (is_window_focused != UserInputService::is_window_focused)
+        signalMouseMovement(nullptr, is_window_focused ? InputBegan : InputEnded);
+    UserInputService::is_window_focused = is_window_focused;
 
     for (unsigned int mouse = 0; mouse < 3; mouse++) {
         const bool pressed = IsMouseButtonPressed(mouse);
@@ -238,12 +273,17 @@ void UserInputService::process(lua_State *L) {
             pushInputEvent(event);
         }
     }
+
     if (mouse_delta.x || mouse_delta.y) {
         InputEvent event = {
-            .type = InputEvent::MouseMovement
+            .type = InputEvent::MouseMovement,
+            .mouse_movement = {
+                .signal = InputChanged
+            }
         };
         pushInputEvent(event);
     }
+
     if (mouse_wheel && mouse_wheel != global_mouse_wheel) {
         global_mouse_wheel = mouse_wheel;
         InputEvent event = {
@@ -290,15 +330,15 @@ void UserInputService::process(lua_State *L) {
         switch (event.type) {
             case InputEvent::MouseClick:
                 global_mouse_wheel = 0;
-                signal = event.mouse_click.down ? "InputBegan" : "InputEnded";
+                signal = INPUT_TYPE_MAP[event.mouse_click.down ? InputBegan : InputEnded];
                 user_input_type.name.assign(MOUSE_BUTTON_MAP[event.mouse_click.mouse]);
                 break;
             case InputEvent::MouseMovement:
-                signal = "InputChanged";
+                signal = INPUT_TYPE_MAP[event.mouse_movement.signal];
                 user_input_type.name.assign("MouseMovement");
                 break;
             case InputEvent::MouseWheel:
-                signal = "InputChanged";
+                signal = INPUT_TYPE_MAP[InputChanged];
                 user_input_type.name.assign("MouseWheel");
                 break;
             case InputEvent::Keyboard:
@@ -317,7 +357,38 @@ void UserInputService::process(lua_State *L) {
         delta.z = 0;
 
         assert(signal != nullptr);
-        userInputServiceFire(L, signal, input_object, false);
+
+        // TODO: gameProcessedEvent
+        const static bool game_processed = false;
+
+        std::shared_ptr<rbxInstance> event_instance;
+        if (auto ptr = event.instance.lock())
+            event_instance = ptr;
+        else
+            event_instance = ServiceProvider::service_map.at("UserInputService");
+
+        // TODO: UserInputState (for example, for inputbegan userinputtype=mousebutton1, we need to set input_object.state to Begin initially, and on mousebutton1 inputend we need to set that previous input_object.state to End)
+        // TODO: related to above, a userinputtype=mousebutton1 InputBegan and InputEnded should have the same input object passed (FACT CHECK THIS, but im 99% sure it's right; docs say input objects are created when an input happens, go through changes, and state becomes end when the input ends)
+        genericFireInputObject(L, event_instance, signal, input_object, game_processed);
+
+        auto clickable = getClickableGuiObject().lock();
+        auto hovered_gui_objects = getGuiObjectsHovered();
+
+        if (event.type != InputEvent::MouseMovement)
+            for (size_t i = 0; i < hovered_gui_objects.size(); i++)
+                if (auto instance = hovered_gui_objects[i].lock())
+                    genericFireInputObject(L, instance, signal, input_object, game_processed);
+
+        if (clickable) {
+            if (event.type == InputEvent::MouseClick) {
+                // TODO: MouseButton*Click & Activated signals
+                std::string button_signal = "MouseButton";
+                button_signal += ('1' + event.mouse_click.mouse);
+                button_signal.append(event.mouse_click.down ? "Down" : "Up");
+                genericFire(L, clickable, button_signal.c_str());
+            }
+        }
+
         input_event_queue.pop();
     }
 }
