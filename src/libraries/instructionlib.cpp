@@ -131,7 +131,7 @@ void open_instructionlib(lua_State *L) {
     // instruction global
     lua_newtable(L);
 
-    pushNewRbxScriptSignal(L, "stephook");
+    pushNewRBXScriptSignal(L, "stephook");
     lua_setfield(L, -2, "stephook");
 
     lua_pushnumber(L, LOP_NOP);
@@ -389,7 +389,7 @@ void stephook(lua_State* L, lua_Debug* ar) {
     }
     const Instruction insn = *--pc;
 
-    pushFunctionFromLookup(L, fireRbxScriptSignalWithFilter);
+    pushFunctionFromLookup(L, fireRBXScriptSignalWithFilter);
 
     lua_getglobal(L, "instructionlib");
     lua_getfield(L, -1, "stephook"); // signal

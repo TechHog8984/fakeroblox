@@ -18,7 +18,7 @@ namespace fakeroblox {
 void userInputServiceFire(lua_State* L, const char* event, std::shared_ptr<rbxInstance> input_object, bool game_processed) {
     std::shared_ptr<rbxInstance> uis = ServiceProvider::service_map.at("UserInputService");
 
-    pushFunctionFromLookup(L, fireRbxScriptSignal);
+    pushFunctionFromLookup(L, fireRBXScriptSignal);
     uis->pushEvent(L, event);
 
     lua_pushinstance(L, input_object);

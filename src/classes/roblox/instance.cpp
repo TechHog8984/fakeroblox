@@ -71,7 +71,7 @@ int rbxInstance::pushEvent(lua_State* L, const char* name) {
     return 1;
 }
 void rbxInstance::reportChanged(lua_State* L, const char* property) {
-    pushFunctionFromLookup(L, fireRbxScriptSignal);
+    pushFunctionFromLookup(L, fireRBXScriptSignal);
     pushEvent(L, "Changed");
     lua_pushstring(L, property);
     lua_call(L, 2, 0);
@@ -92,13 +92,13 @@ void destroyInstance(lua_State* L, std::shared_ptr<rbxInstance> instance, bool d
     if (instance->destroyed)
         return;
 
-    // FIXME: full destroy behavior (consult docs)
     clearAllInstanceChildren(L, instance);
 
     for (auto& event : instance->events) {
+        pushFunctionFromLookup(L, disconnectAllRBXScriptSignal);
         instance->pushEvent(L, event.c_str());
-        rbxScriptSignal* signal = lua_checkrbxscriptsignal(L, -1);
-        signal->~rbxScriptSignal();
+        lua_call(L, 1, 0);
+
         lua_pop(L, 1);
     }
 
@@ -563,7 +563,7 @@ std::shared_ptr<rbxInstance> newInstance(lua_State* L, const char* class_name, s
         instance->events.insert(instance->events.end(), c->events.begin(), c->events.end());
         for (auto& event : c->events) {
             lua_pushstring(L, event.c_str());
-            pushNewRbxScriptSignal(L, event);
+            pushNewRBXScriptSignal(L, event);
             lua_rawset(L, -3);
         }
         if (c->constructor)

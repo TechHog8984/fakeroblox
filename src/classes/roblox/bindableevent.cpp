@@ -13,7 +13,7 @@ namespace rbxInstance_BindableEvent_methods {
         lua_remove(L, 1);
         lua_insert(L, 1);
 
-        fireRbxScriptSignal(L);
+        fireRBXScriptSignal(L);
 
         return 0;
     }

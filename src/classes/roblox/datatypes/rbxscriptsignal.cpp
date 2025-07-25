@@ -8,11 +8,7 @@
 
 namespace fakeroblox {
 
-void rbxScriptSignal::destroy(lua_State* L) {
-    // FIXME: disconnect connections
-}
-
-int pushNewRbxScriptSignal(lua_State* L, std::string name) {
+int pushNewRBXScriptSignal(lua_State* L, std::string name) {
     lua_getfield(L, LUA_REGISTRYINDEX, SIGNALCONNECTIONLISTLOOKUP);
 
     rbxScriptSignal* signal = static_cast<rbxScriptSignal*>(lua_newuserdata(L, sizeof(rbxScriptSignal)));
@@ -20,7 +16,7 @@ int pushNewRbxScriptSignal(lua_State* L, std::string name) {
 
     signal->name.assign(name);
 
-    luaL_getmetatable(L, "RbxScriptSignal");
+    luaL_getmetatable(L, "RBXScriptSignal");
     lua_setmetatable(L, -2);
 
     lua_pushvalue(L, -1);
@@ -33,7 +29,7 @@ int pushNewRbxScriptSignal(lua_State* L, std::string name) {
 }
 
 rbxScriptSignal* lua_checkrbxscriptsignal(lua_State* L, int narg) {
-    void* ud = luaL_checkudata(L, narg, "RbxScriptSignal");
+    void* ud = luaL_checkudata(L, narg, "RBXScriptSignal");
 
     return static_cast<rbxScriptSignal*>(ud);
 }
@@ -53,7 +49,7 @@ namespace rbxScriptSignal_methods {
         lua_checkrbxscriptsignal(L, 1);
         luaL_checktype(L, 2, LUA_TFUNCTION);
 
-        pushNewRbxScriptConnection(L, 2);
+        pushNewRBXScriptConnection(L, 2);
 
         pushSignalConnectionList(L, 1);
         lua_pushvalue(L, -2);
@@ -65,7 +61,8 @@ namespace rbxScriptSignal_methods {
     }
 };
 lua_CFunction getrbxScriptSignalMethod(const char* key) {
-    if (strequal(key, "Connect") || strequal(key, "connect"))
+    // TODO: Parallel Luau
+    if (strequal(key, "Connect") || strequal(key, "connect") || strequal(key, "ConnectParallel") || strequal(key, "connectParallel"))
         return rbxScriptSignal_methods::connect;
 
     return nullptr;
@@ -84,9 +81,16 @@ static int rbxScriptSignal__index(lua_State* L) {
 
     lua_CFunction func = getrbxScriptSignalMethod(key);
     if (!func)
-        luaL_error(L, "%s is not a valid member of RbxScriptSignal", key);
+        luaL_error(L, "%s is not a valid member of RBXScriptSignal", key);
 
     return pushFunctionFromLookup(L, func, key);
+}
+static int rbxScriptSignal__newindex(lua_State* L) {
+    lua_checkrbxscriptsignal(L, 1);
+    const char* key = lua_tostring(L, 2);
+
+    luaL_error(L, "%s is not a valid member of RBXScriptSignal", key);
+    return 0;
 }
 static int rbxScriptSignal__namecall(lua_State* L) {
     lua_checkrbxscriptsignal(L, 1);
@@ -96,12 +100,12 @@ static int rbxScriptSignal__namecall(lua_State* L) {
 
     lua_CFunction func = getrbxScriptSignalMethod(namecall);
     if (!func)
-        luaL_error(L, "%s is not a valid member of RbxScriptSignal", namecall);
+        luaL_error(L, "%s is not a valid member of RBXScriptSignal", namecall);
 
     return func(L);
 }
 
-int fireRbxScriptSignalWithFilter(lua_State* L) {
+int fireRBXScriptSignalWithFilter(lua_State* L) {
     lua_checkrbxscriptsignal(L, 1);
     bool use_filter = !lua_isnil(L, 2);
     if (use_filter)
@@ -156,11 +160,28 @@ int fireRbxScriptSignalWithFilter(lua_State* L) {
 
     return 0;
 }
-int fireRbxScriptSignal(lua_State* L) {
+int fireRBXScriptSignal(lua_State* L) {
     lua_pushnil(L);
     lua_insert(L, 2);
 
-    return fireRbxScriptSignalWithFilter(L);
+    return fireRBXScriptSignalWithFilter(L);
+}
+
+int disconnectAllRBXScriptSignal(lua_State *L) {
+    lua_checkrbxscriptsignal(L, 1);
+
+    pushSignalConnectionList(L, 1);
+    lua_remove(L, 1);
+
+    lua_pushnil(L);
+    while (lua_next(L, -2) != 0) {
+        rbxScriptConnection* connection = lua_checkrbxscriptconnection(L, -1);
+        connection->destroy(L);
+
+        lua_pop(L, 1);
+    }
+
+    return 0;
 }
 
 void setup_rbxscriptsignal(lua_State *L) {
@@ -173,12 +194,12 @@ void setup_rbxscriptsignal(lua_State *L) {
     lua_setfield(L, LUA_REGISTRYINDEX, SIGNALCONNECTIONLISTLOOKUP);
 
     // metatable
-    luaL_newmetatable(L, "RbxScriptSignal");
+    luaL_newmetatable(L, "RBXScriptSignal");
 
-    setfunctionfield(L, rbxScriptSignal__tostring, "__tostring", nullptr);
-    setfunctionfield(L, rbxScriptSignal__index, "__index", nullptr);
-    // TODO: __newindex that errors 'readonly'
-    setfunctionfield(L, rbxScriptSignal__namecall, "__namecall", nullptr);
+    setfunctionfield(L, rbxScriptSignal__tostring, "__tostring");
+    setfunctionfield(L, rbxScriptSignal__index, "__index");
+    setfunctionfield(L, rbxScriptSignal__newindex, "__newindex");
+    setfunctionfield(L, rbxScriptSignal__namecall, "__namecall");
 
     lua_pop(L, 1);
 

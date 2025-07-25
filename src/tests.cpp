@@ -18,6 +18,7 @@ namespace fakeroblox {
     FakeRobloxTest test_list[] = {
         { .name = "can spawn lua function", .value = canSpawnLuaFunction },
         { .name = "can spawn C function", .value = canSpawnCFunction },
+
         { .name = "task.wait", .value = "local time_before = os.clock() \
             local count = math.random(1, 8000) / 10000; \
             print('waiting for ' .. count .. ' seconds') \
@@ -26,9 +27,11 @@ namespace fakeroblox {
             assert(elapsed >= count, 'not enough time was elapsed') \
             print('waited for ' .. elapsed .. ' seconds')"
         },
+
         { .name = "instance cache", .value = "assert(game.Workspace == workspace) "},
         { .name = "instance method cache", .value = "assert(game.Destroy == workspace.Destroy)" },
         { .name = "instance method route", .value = "assert(game.children == game.GetChildren)" },
+
         { .name = "BindableEvent", .value = "local target = {} \
             local upvalue\
             local inst = Instance.new('BindableEvent') \
@@ -38,8 +41,18 @@ namespace fakeroblox {
             task.wait(0.1) \
             assert(upvalue == target) \
         "},
+        { .name = "RBXScriptConnection", .value = "local con = workspace.ChildAdded:Connect(print); \
+            local success, message = pcall(function() con.Connected = false end) \
+            assert(not success, 'RBXScriptConnection Connected should not be mutable') \
+            assert(message:match('Connected is not a valid member of RBXScriptConnection$'), 'invalid error message when setting Connected: ' .. message) \
+            assert(con.Connected, 'Connected should be true before disconnection') \
+            con:Disconnect() \
+            assert(not con.Connected, 'Connected should be false after disconnection') \
+        "},
+
         { .name = "Enum equality", .value = "assert(Enum.KeyCode == Enum.KeyCode) "},
         { .name = "EnumItem equality", .value = "assert(Enum.KeyCode.A == Enum.KeyCode.A)" },
+
         { .name = "ServiceProvider", .value = "if shared.ignoreserviceprovider then \
                 warn('SKIPPING SERVICEPROVIDER TEST SINCE IT ALREADY RAN') \
                 return \
@@ -49,6 +62,7 @@ namespace fakeroblox {
             assert(game:GetService('HeightmapImporterService')) \
             assert(game:FindService('HeightmapImporterService')) \
         "},
+
         { .name = "UDim2.new", .value = "local obj = UDim2.new() \
             local function check(a,b,c,d) \
                 assert(obj.X.Scale == a, 'xscale: ' .. a .. ', ' .. b .. ', ' .. c .. ', ' .. d .. ' | ' .. tostring(obj)) \
