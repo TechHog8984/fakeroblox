@@ -4,8 +4,6 @@
 #include <cstdlib>
 #include <cstring>
 
-#include <curl/curl.h>
-
 namespace fakeroblox {
 
 /* credits START: https://stackoverflow.com/questions/27007379/how-do-i-get-response-value-using-curl-in-c/27007490#27007490 */

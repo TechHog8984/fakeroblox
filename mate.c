@@ -10,7 +10,7 @@ int main() {
     };
     Executable executable = CreateExecutable(executable_options);
 
-    AddIncludePaths(executable, "./include");
+    AddIncludePaths(executable, "./include", "./dependencies/json/include", "./dependencies/curl/include");
 
     AddFile(executable, "./src/*.cpp");
     AddFile(executable, "./src/classes/*.cpp");
@@ -30,13 +30,16 @@ int main() {
     AddIncludePaths(executable, "./dependencies/rlImGui");
     AddIncludePaths(executable, "./dependencies/rlImGui/imgui-master");
 
-    LinkSystemLibraries(executable, "m", "stdc++", "curl", "raylib");
+    LinkSystemLibraries(executable, "m", "stdc++", "raylib");
 
     AddLibraryPaths(executable, "./dependencies/Luau/cmake");
     LinkSystemLibraries(executable, "Luau");
 
     AddLibraryPaths(executable, "./dependencies/rlImGui/bin/Release");
     LinkSystemLibraries(executable, "rlImGui");
+
+    AddLibraryPaths(executable, "./dependencies/curl/cmake/lib");
+    LinkSystemLibraries(executable, "curl");
 
     InstallExecutable(executable);
 

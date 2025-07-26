@@ -3,7 +3,7 @@
 #include <functional>
 #include <string>
 #include <cstring> // for strcmp for strequal
-#include <nlohmann/json.hpp>
+#include "nlohmann/json.hpp"
 
 #include "lua.h"
 

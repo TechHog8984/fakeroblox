@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstddef>
-#include <curl/curl.h>
+#include "curl/curl.h"
 
 namespace fakeroblox {
 

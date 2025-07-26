@@ -1,6 +1,8 @@
 -std=c++17
 
 -Iinclude
+-Idependencies/json/include
+-Idependencies/curl/include
 
 -Idependencies/Luau/Analysis/include
 -Idependencies/Luau/Ast/include

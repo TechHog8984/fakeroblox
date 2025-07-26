@@ -1,10 +1,10 @@
 #include <cfloat>
 #include <cstdio>
 #include <cstring>
-#include <curl/curl.h>
 #include <fstream>
 #include <queue>
 
+#include "curl/curl.h"
 #include "raylib.h"
 #include "rlImGui.h"
 #include "imgui.h"
