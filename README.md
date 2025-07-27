@@ -5,9 +5,11 @@ fakeroblox is an attempt to create a Luau environment that is as close to Roblox
 creation date: Jun 25, 2025
 
 # BUILDING
-fakeroblox uses [mate.h](https://github.com/TomasBorquez/mate.h/) for its core build system, along with some shell files (sorry) to build the dependencies
+NOTE: fakeroblox has _no_ native Windows support. It is, however, likely possible to build using mingw, but that would require additional steps.
 
-to build the dependencies, just run the two scripts inside the dependencies folder with bash:
+fakeroblox uses [mate.h](https://github.com/TomasBorquez/mate.h/) for its core build system, along with some shell files (sorry) to build the dependencies.
+<br>
+To build dependencies, just run the two scripts inside the dependencies folder with bash:
 ```bash
 cd dependencies
 
