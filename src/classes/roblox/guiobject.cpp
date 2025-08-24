@@ -4,11 +4,11 @@
 namespace fakeroblox {
 
 void rbxInstance_GuiObject_init() {
-    rbxClass::class_map["GuiObject"]->constructor = [](lua_State* L, std::shared_ptr<rbxInstance> instance) {
-        instance->setValue<Color>(L, "BackgroundColor3", {163, 162, 165, 255}, true);
-        instance->setValue<Color>(L, "BorderColor3", {27, 42, 53, 255}, true);
-        instance->setValue<int>(L, "BorderSizePixel", 1, true);
-        instance->setValue<bool>(L, "Visible", true, true);
+    rbxClass::class_map["GuiObject"]->constructor = [](lua_State* L, rbxInstance* instance) {
+        std::get<Color>(instance->values["BackgroundColor3"].value) = {163, 162, 165, 255};
+        std::get<Color>(instance->values["BorderColor3"].value) = {27, 42, 53, 255};
+        std::get<int>(instance->values["BorderSizePixel"].value) = 1;
+        std::get<bool>(instance->values["Visible"].value) = true;
     };
 }
 

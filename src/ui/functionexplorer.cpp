@@ -2,35 +2,45 @@
 
 #include "classes/roblox/instance.hpp"
 #include "classes/roblox/serviceprovider.hpp"
+#include "ui/ui.hpp"
 
-#include "common.hpp"
+#include "taskscheduler.hpp"
+
 #include "imgui.h"
 
+#include "lapi.h"
+#include "lgc.h"
 #include "lobject.h"
-#include "lstate.h" // for L->top
+#include "lstate.h"
+#include "lstring.h"
 #include "lua.h"
 #include "lualib.h"
 #include "lmem.h"
 
 #include <memory>
-#include <shared_mutex>
 
 namespace fakeroblox {
 
-static int selected_function_index = -1;
-static std::shared_mutex select_function_mutex;
+#define SELECTED_FUNCTION_KEY "functionexplorerselectedfunction"
+
+// options
+static bool filter_show_c = true;
+static bool filter_show_lua = true;
+
+void setSelectedFunction(lua_State* L, Closure* cl) {
+    // TODO: I think this can cause a double free! verify this
+    lua_pushnil(L);
+    setclvalue(L, const_cast<TValue*>(luaA_toobject(L, -1)), cl);
+    lua_rawsetfield(L, LUA_REGISTRYINDEX, SELECTED_FUNCTION_KEY);
+}
 
 namespace UI_FunctionExplorer_methods {
     static int selectFunction(lua_State* L) {
         std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1, "FunctionExplorer");
         luaL_checktype(L, 2, LUA_TFUNCTION);
+        luaL_argcheck(L, lua_gettop(L) == 2, 3, "too many arguments");
 
-        std::lock_guard lock(select_function_mutex);
-
-        lua_getfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
-        selected_function_index = addToLookup(L, [&L] {
-            lua_pushvalue(L, 2);
-        });
+        lua_rawsetfield(L, LUA_REGISTRYINDEX, SELECTED_FUNCTION_KEY);
 
         return 0;
     }
@@ -39,6 +49,7 @@ namespace UI_FunctionExplorer_methods {
 void UI_FunctionExplorer_init(lua_State* L) {
     auto FunctionExplorer = std::make_shared<rbxClass>();
     FunctionExplorer->name.assign("FunctionExplorer");
+    FunctionExplorer->tags |= rbxClass::NotCreatable;
     FunctionExplorer->superclass = rbxClass::class_map["Instance"];
 
     FunctionExplorer->methods["SelectFunction"] = {
@@ -53,54 +64,96 @@ void UI_FunctionExplorer_init(lua_State* L) {
     std::shared_ptr<rbxInstance> game = lua_checkinstance(L, -1, "DataModel");
     lua_pop(L, 1);
 
-    ServiceProvider::getService(L, game, "FunctionExplorer");
+    ServiceProvider::createService(L, game, "FunctionExplorer");
 }
+
+#define getdebugname(closure) (closure->isC ? closure->c.debugname : (closure->l.p->debugname ? closure->l.p->debugname->data : nullptr))
 
 std::vector<Closure*> closure_list;
 
 void UI_FunctionExplorer_render(lua_State *L) {
-    ImGui::BeginChild("Function List", ImVec2{ImGui::GetContentRegionAvail().x * 0.35f, ImGui::GetContentRegionAvail().y}, ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
+    Closure* selected_function = nullptr;
 
-    ImGui::Text("FUNCTION LIST WIP");
+    if (ImGui::BeginMenuBar()) {
+        if (ImGui::BeginMenu("Options")) {
+            ImGui::MenuItem("Show C Functions", nullptr, &filter_show_c);
+            ImGui::MenuItem("Show Lua Functions", nullptr, &filter_show_lua);
 
-    // const bool was_gc_running = lua_gc(L, LUA_GCISRUNNING, 0);
-    // if (was_gc_running)
-    //     lua_gc(L, LUA_GCSTOP, 0);
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenuBar();
+    }
 
-    // int context;
+    lua_getfield(L, LUA_REGISTRYINDEX, SELECTED_FUNCTION_KEY);
+    if (lua_isfunction(L, -1))
+        selected_function = clvalue(luaA_toobject(L, -1));
 
-    // luaM_visitgco(L, &context, [] (void* ud, lua_Page* page, GCObject* gc_object) {
-    //     // auto context = static_cast<GetGcContext*>(ud);
+    ImGui::BeginChild("Function List", ImVec2{230.f, ImGui::GetContentRegionAvail().y}, ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
 
-    //     auto type = gc_object->gch.tt;
-    //     if (type != LUA_TFUNCTION)
-    //         return false;
+    static char list_search_buffer[128] = "";
+    ImGui::InputText("Search", list_search_buffer, IM_ARRAYSIZE(list_search_buffer));
 
-    //     return false;
-    // });
+    ImGui::BeginChild("ScrollableRegion", ImGui::GetContentRegionAvail(), 0, ImGuiWindowFlags_HorizontalScrollbar);
+
+    const bool resume_gc = TaskScheduler::pauseGarbageCollection(L);
+
+    struct VisitUserdata_t {
+        Closure* current_selected;
+        Closure* new_selected = nullptr;
+        char msg[100];
+    } VisitUserdata;
+    VisitUserdata.current_selected = selected_function;
+
+    luaM_visitgco(L, &VisitUserdata, [](void* ud, lua_Page* page, GCObject* object) {
+        auto visit_ud = static_cast<VisitUserdata_t*>(ud);
+        if (object->gch.tt == LUA_TFUNCTION) {
+            auto cl = gco2cl(object);
+
+            if (cl->isC) {
+                if (!filter_show_c)
+                    goto RET;
+            } else if (!filter_show_lua)
+                goto RET;
+
+            const bool is_selected = visit_ud->current_selected && cl == visit_ud->current_selected;
+
+            const char* debugname = getdebugname(cl);
+            std::string namestr = "";
+            if (debugname)
+                namestr.assign(" (").append(debugname) += ')';
+
+            static const char* fmt = "%p%s";
+            snprintf(visit_ud->msg, 100, fmt, object, namestr.c_str());
+
+            if (strlen(list_search_buffer) == 0 || std::string(visit_ud->msg).find(list_search_buffer) != std::string::npos)
+                if (ImGui::Selectable(visit_ud->msg, is_selected))
+                    visit_ud->new_selected = cl;
+        }
+        RET:
+        return false;
+    });
+
+    if (VisitUserdata.new_selected) {
+        setSelectedFunction(L, VisitUserdata.new_selected);
+        selected_function = VisitUserdata.new_selected;
+    }
 
     ImGui::EndChild();
 
-    if (selected_function_index > -1) {
-        lua_getfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
+    ImGui::EndChild();
 
+    if (selected_function) {
         ImGui::SameLine();
 
-        std::lock_guard lock(select_function_mutex);
-
-        lua_rawgeti(L, -1, selected_function_index);
-        TValue* func_value = L->top - 1;
-        assert(func_value->tt == LUA_TFUNCTION);
-
-        Closure* closure = clvalue(func_value);
+        Closure* closure = selected_function;
         const bool is_c = closure->isC;
 
         ImGui::BeginChild("Function Display", ImVec2{0, 0}, ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
 
-        ImGui::Text("Function @ %d", selected_function_index);
+        ImGui::Text("Function %p", closure);
         ImGui::Text("Context: %s", is_c ? "C" : "Lua");
 
-        const char* debugname = is_c ? closure->c.debugname : (closure->l.p->debugname ? closure->l.p->debugname->data : nullptr);
+        const char* debugname = getdebugname(closure);
         ImGui::Text("Debug name: %s", debugname);
 
         if (is_c) {
@@ -117,30 +170,52 @@ void UI_FunctionExplorer_render(lua_State *L) {
 
             ImGui::SeparatorText("Constants");
 
+            size_t msg_size = 30 * sizeof(char);
+            char* msg = static_cast<char*>(malloc(msg_size));
             TValue* k = p->k;
             for (int i = 0; i < p->sizek; i++) {
-                ImGui::Text("%u", i);
+                ImGui::PushID(i);
 
-                ImGui::SameLine();
+                ImGui::Text("%d =", i + 1);
+
                 switch (ttype(k)) {
-                    case LUA_TNIL:
-                        ImGui::Text("nil");
+                    case LUA_TBOOLEAN: {
+                        ImGui::SameLine();
+                        bool value = bvalue(k);
+                        ImGui::Checkbox("##value", &value);
+                        if (value != bvalue(k))
+                            bvalue(k) = value;
                         break;
-                    case LUA_TBOOLEAN:
-                        ImGui::Text("bool (%s)", bvalue(k) ? "true" : "false");
+                    } case LUA_TNUMBER:
+                        ImGui::SameLine();
+                        ImGui::DragScalar("##value", ImGuiDataType_Double, &nvalue(k));
                         break;
-                    case LUA_TNUMBER:
-                        ImGui::Text("number (%.f)", nvalue(k));
+                    // TODO: mutable string via ImGui_STDString
+                    case LUA_TSTRING:  {
+                        std::string s(tsvalue(k)->data, tsvalue(k)->len);
+                        ImGui::SameLine();
+                        if (ImGui_STDString("##value", s))
+                            setsvalue(L, k, luaS_newlstr(L, s.c_str(), s.size()));
                         break;
-                    case LUA_TSTRING: 
-                        ImGui::TextUnformatted(tsvalue(k)->data, tsvalue(k)->data + tsvalue(k)->len);
+                    }
+                    default: {
+                        std::string str = safetostringobj(L, k, true);
+                        static const char* fmt = "%.*s";
+                        size_t size = snprintf(NULL, 0, fmt, static_cast<int>(str.size()), str.c_str());
+                        if (size > msg_size) {
+                            msg_size = size;
+                            msg = static_cast<char*>(realloc(msg, msg_size));
+                        }
+                        snprintf(msg, size + 1, fmt, static_cast<int>(str.size()), str.c_str());
+
+                        ImGui::TextUnformatted(msg, msg + size);
                         break;
-                    default:
-                        ImGui::Text("%s (WIP)", lua_typename(L, ttype(k)));
-                        break;
+                    }
                 }
                 k++;
+                ImGui::PopID();
             }
+            free(msg);
 
             ImGui::SeparatorText("Upvalues");
 
@@ -151,12 +226,12 @@ void UI_FunctionExplorer_render(lua_State *L) {
         }
 
         ImGui::EndChild();
-
-        lua_pop(L, 2);
     }
 
-    // if (was_gc_running)
-    //     lua_gc(L, LUA_GCRESTART, 0);
+    lua_pop(L, 1);
+
+    if (resume_gc)
+        TaskScheduler::resumeGarbageCollection(L);
 }
 
 }; // namespace fakeroblox

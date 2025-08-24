@@ -1,7 +1,6 @@
 #pragma once
 
 #include "lua.h"
-#include <raylib.h>
 
 namespace fakeroblox {
 

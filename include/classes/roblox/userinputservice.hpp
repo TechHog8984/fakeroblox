@@ -6,7 +6,7 @@
 
 namespace fakeroblox {
 
-enum InputType {
+enum InputState {
     InputBegan,
     InputChanged,
     InputEnded
@@ -16,10 +16,10 @@ class UserInputService {
 public:
     static bool is_window_focused;
 
-    static void signalMouseMovement(std::shared_ptr<rbxInstance> instance, InputType type);
+    static void signalMouseMovement(std::shared_ptr<rbxInstance> instance, InputState type);
     static void process(lua_State* L);
 };
 
-void rbxInstance_UserInputService_init(lua_State* L);
+void rbxInstance_UserInputService_init();
 
 }; // namespace fakeroblox

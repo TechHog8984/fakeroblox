@@ -1,7 +1,8 @@
 #include "classes/roblox/datatypes/rbxscriptsignal.hpp"
 #include "classes/roblox/datatypes/rbxscriptconnection.hpp"
+
 #include "common.hpp"
-#include "libraries/tasklib.hpp"
+#include "taskscheduler.hpp"
 
 #include "lua.h"
 #include "lualib.h"
@@ -113,7 +114,7 @@ int fireRBXScriptSignalWithFilter(lua_State* L) {
 
     int arg_count = lua_gettop(L) - 2;
 
-    pushFunctionFromLookup(L, fakeroblox_task_spawn, "spawn");
+    pushFunctionFromLookup(L, fr_task_spawn, "spawn");
 
     pushSignalConnectionList(L, 1);
     lua_remove(L, 1);
@@ -184,7 +185,7 @@ int disconnectAllRBXScriptSignal(lua_State *L) {
     return 0;
 }
 
-void setup_rbxscriptsignal(lua_State *L) {
+void setup_rbxScriptSignal(lua_State *L) {
     // signallookup
     lua_newtable(L);
     lua_setfield(L, LUA_REGISTRYINDEX, SIGNALLOOKUP);
@@ -203,7 +204,7 @@ void setup_rbxscriptsignal(lua_State *L) {
 
     lua_pop(L, 1);
 
-    setup_rbxscriptconnection(L);
+    setup_rbxScriptConnection(L);
 }
 
 }; // namespace fakeroblox

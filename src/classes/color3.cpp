@@ -2,7 +2,6 @@
 #include "common.hpp"
 
 #include <cstring>
-#include <raylib.h>
 
 #include "lua.h"
 #include "lualib.h"

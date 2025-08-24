@@ -9,6 +9,11 @@
 
 namespace fakeroblox {
 
+enum ConsoleId {
+    Script,
+    Tests
+};
+
 class Console {
 public:
     static Console ScriptConsole;
@@ -29,16 +34,19 @@ public:
         } type;
         std::string content;
     };
+    static const char* getMessageTypeString(Message::Type type);
+
+    ConsoleId id;
+
     std::shared_mutex mutex;
     std::vector<Message> messages;
-    size_t message_count = 0;
 
     bool show_info;
     bool show_warning;
     bool show_error;
     bool show_debug;
 
-    Console(bool show_info = true, bool show_warning = true, bool show_error = true, bool show_debug = false);
+    Console(ConsoleId id, bool show_info = true, bool show_warning = true, bool show_error = true, bool show_debug = false);
 
     void clear();
     void renderMessages();

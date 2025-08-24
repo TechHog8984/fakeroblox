@@ -1,11 +1,11 @@
 #pragma once
 
 #include "lua.h"
-#include <raylib.h>
+#include "raylib.h"
 
 namespace fakeroblox {
 
-int pushVector3(lua_State* L, double x, double y, double z);
+int pushVector3(lua_State* L, float x, float y, float z);
 int pushVector3(lua_State* L, Vector3 vector3);
 Vector3* lua_checkvector3(lua_State* L, int narg);
 

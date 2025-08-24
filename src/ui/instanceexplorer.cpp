@@ -12,7 +12,16 @@ namespace fakeroblox {
 std::shared_ptr<rbxInstance> game;
 
 std::weak_ptr<rbxInstance> selected_instance;
-std::queue<std::shared_ptr<rbxInstance>> destroy_queue;
+
+typedef struct {
+    enum {
+        Destroy,
+        Clone
+    } type;
+    std::shared_ptr<rbxInstance> instance;
+} ContextQueueItem;
+
+std::queue<ContextQueueItem> context_queue;
 
 void UI_InstanceExplorer_init(std::shared_ptr<rbxInstance> datamodel) {
     game = datamodel;
@@ -39,12 +48,24 @@ void renderNode(lua_State* L, std::shared_ptr<rbxInstance> instance, std::vector
         selected_instance = instance;
 
     if (instance && ImGui::BeginPopupContextItem()) {
+        const bool not_creatable = instance->_class->tags & rbxClass::NotCreatable;
+        const bool not_archivable = !getValue<bool>(instance, PROP_INSTANCE_ARCHIVABLE);
+
+        if (not_creatable || not_archivable)
+            ImGui::BeginDisabled();
+        if (ImGui::Button("Clone"))
+            context_queue.push({ .type = ContextQueueItem::Clone, .instance = instance });
+        if (not_creatable || not_archivable) {
+            ImGui::SetItemTooltip(not_creatable ? "not creatable" : "not archivable");
+            ImGui::EndDisabled();
+        }
+
         const bool parent_locked = instance->parent_locked;
 
         if (parent_locked)
             ImGui::BeginDisabled();
         if (ImGui::Button("Destroy"))
-            destroy_queue.push(instance);
+            context_queue.push({ .type = ContextQueueItem::Destroy, .instance = instance });
         if (parent_locked) {
             ImGui::SetItemTooltip("parent locked");
             ImGui::EndDisabled();
@@ -65,7 +86,7 @@ void renderInstance(lua_State* L, std::shared_ptr<rbxInstance>& instance) {
 
     std::shared_lock instance_children_lock(instance->children_mutex);
 
-    auto object_name = instance->getValue<std::string>(PROP_INSTANCE_NAME);
+    auto object_name = getValue<std::string>(instance, PROP_INSTANCE_NAME);
     if (show_address_near_name) {
         char buf[50];
         snprintf(buf, 50, " (%p)", instance.get());
@@ -180,16 +201,31 @@ void UI_InstanceExplorer_render(lua_State *L) {
         ImGui::PopID();
     }
 
-    while (!destroy_queue.empty()) {
-        auto& instance = destroy_queue.front();
+    while (!context_queue.empty()) {
+        auto& item = context_queue.front();
+        auto instance = item.instance;
 
-        if (auto selected = selected_instance.lock())
-            if (selected == instance)
-                selected_instance.reset();
+        switch (item.type) {
+            case ContextQueueItem::Destroy:
+                destroyInstance(L, instance);
 
-        destroyInstance(L, instance);
+                if (auto selected = selected_instance.lock())
+                    if (selected == instance)
+                        selected_instance.reset();
 
-        destroy_queue.pop();
+                break;
+            case ContextQueueItem::Clone: {
+                auto clone = cloneInstance(L, instance);
+                if (clone) {
+                    setInstanceParent(L, clone, getValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT), true);
+                    selected_instance = clone;
+                }
+                // TODO: notification system; notify(attempt to clone an instance that's not Archivable!)
+                break;
+            }
+        }
+
+        context_queue.pop();
     }
 
     if (auto selected = selected_instance.lock())
@@ -203,7 +239,7 @@ void UI_InstanceExplorer_render(lua_State *L) {
     const auto& rbxinstance_parent_property = rbxClass::class_map["Instance"]->properties["Parent"];
 
     if (auto selected = selected_instance.lock()) {
-        auto selected_name = selected->getValue<std::string>(PROP_INSTANCE_NAME);
+        auto selected_name = getValue<std::string>(selected, PROP_INSTANCE_NAME);
         ImGui::Text("%.*s", static_cast<int>(selected_name.size()), selected_name.c_str());
 
         ImGui::SeparatorText("Properties");

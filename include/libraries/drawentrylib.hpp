@@ -1,9 +1,10 @@
 #pragma once
 
-#include <raylib.h>
 #include <shared_mutex>
 #include <string>
 #include <vector>
+
+#include "raylib.h"
 
 #include "lua.h"
 
@@ -14,20 +15,21 @@ public:
     static std::vector<DrawEntry*> draw_list;
     static std::shared_mutex draw_list_mutex;
 
+    static void clear(lua_State* L);
     static void render();
 
     enum Type {
-      Line,
-      Text,
-      Image,
-      Circle,
-      Square,
-      Triangle,
-      Quad
+        DrawTypeLine,
+        DrawTypeText,
+        DrawTypeImage,
+        DrawTypeCircle,
+        DrawTypeSquare,
+        DrawTypeTriangle,
+        DrawTypeQuad
     } type;
     const char* class_name = "[DrawEntry]";
 
-    int ref;
+    int lookup_index;
     bool alive = true;
 
     std::shared_mutex members_mutex;
@@ -38,7 +40,8 @@ public:
 
     void onZIndexUpdate();
     void free();
-    void destroy(lua_State* L);
+    void destroy(lua_State* L, bool dont_erase = false);
+    DrawEntry* clone(lua_State* L);
 
     DrawEntry(Type type, const char* class_name);
 };
@@ -52,33 +55,61 @@ public:
     DrawEntryLine();
 };
 
+enum FontEnum {
+    FontDefault,     // use whatever raylib's default font is
+
+    FontUI,          // Segoe UI 
+    FontSystem,      // ProggyClean
+    FontPlex,        // IBMPlexSans
+    FontMonospace,   // SometypeMono
+
+    FONT__COUNT      // do not use!
+};
+
 class DrawEntryText : public DrawEntry {
 public:
+    static size_t default_font;
+
     std::string text = "";
     Vector2 text_bounds{0, 0};
     double text_size = 20;
 
-    enum FontEnum {
-        Default,     // use whatever raylib's default font is
-        Custom,      // supply ttf via custom_font_data
-        FONT__COUNT  // do not use!
-    } font_enum;
+    int font_index = FontDefault;
     std::string custom_font_data = "";
-    Font font = GetFontDefault();
+    Font* font = nullptr;
 
     bool centered = false;
     bool outlined = false;
     Color outline_color{0, 0, 0};
     Vector2 position{0, 0};
 
-    Vector2 outline_position{1, 1};
-    // double outline_text_size = 22;
-
     DrawEntryText();
 
     void updateTextBounds();
     void updateFont();
+    void updateCustomFont();
     void updateOutline();
+};
+
+class DrawEntryImage : public DrawEntry {
+public:
+    Image* image;
+    Texture2D texture;
+    RenderTexture2D mask = {};
+
+    std::string data = "";
+    Vector2 image_size{0, 0};
+
+    Vector2 size{0, 0};
+    Vector2 position{0, 0};
+    double rounding = 0;
+
+    DrawEntryImage();
+    ~DrawEntryImage();
+
+    void updateData();
+    void resizeImage();
+    void updateRounding();
 };
 
 class DrawEntryCircle : public DrawEntry {

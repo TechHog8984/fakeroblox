@@ -4,8 +4,8 @@
 namespace fakeroblox {
 
 void rbxInstance_LayerCollector_init() {
-    rbxClass::class_map["LayerCollector"]->constructor = [](lua_State* L, std::shared_ptr<rbxInstance> instance) {
-        instance->setValue<bool>(L, "Enabled", true, true);
+    rbxClass::class_map["LayerCollector"]->constructor = [](lua_State* L, rbxInstance* instance) {
+        std::get<bool>(instance->values["Enabled"].value) = true;
     };
 }
 

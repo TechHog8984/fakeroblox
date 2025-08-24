@@ -1,8 +1,6 @@
 #include "classes/udim.hpp"
 #include "common.hpp"
 
-#include <raylib.h>
-
 #include "lua.h"
 #include "lualib.h"
 

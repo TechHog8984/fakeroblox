@@ -1,12 +1,147 @@
 #include "common.hpp"
-#include "libraries/tasklib.hpp"
+#include "console.hpp"
+#include "taskscheduler.hpp"
+
+#include "classes/roblox/instance.hpp"
+
+#include <cassert>
+#include <cstdio>
+#include <cstring>
 
 #include "lua.h"
 #include "lualib.h"
-#include <cassert>
-#include <cstring>
+#include "lapi.h"
+#include "lnumutils.h"
+#include "lstate.h"
 
 namespace fakeroblox {
+
+bool print_stdout = false;
+
+std::map<size_t, Destructor> sharedptr_destructor_list;
+std::map<void*, size_t> object_destructor_map;
+
+void initializeSharedPtrDestructorList() {
+    #define addConstructor(Class) {                                                  \
+        sharedptr_destructor_list[Class::class_index()] = [] (void* ud) {            \
+            std::shared_ptr<Class>* ptr = static_cast<std::shared_ptr<Class>*>(ud);  \
+            ptr->reset();                                                            \
+        };                                                                           \
+    }
+
+    addConstructor(rbxInstance)
+
+    #undef addConstructor
+}
+
+std::string fixString(std::string_view original) {
+    std::string result = "\"";
+
+    for (auto& ch : original) {
+        if (ch > 31 && ch < 127 && ch != '"' && ch != '\\')
+            result.append(std::string{ch});
+        else {
+            switch (ch) {
+                case 7:
+                    result.append("\\a");
+                    break;
+                case 8:
+                    result.append("\\b");
+                    break;
+                case 9:
+                    result.append("\\t");
+                    break;
+                case 10:
+                    result.append("\\n");
+                    break;
+                case 11:
+                    result.append("\\v");
+                    break;
+                case 12:
+                    result.append("\\f");
+                    break;
+                case 13:
+                    result.append("\\r");
+                    break;
+
+                case '"':
+                    result.append("\\\"");
+                    break;
+                case '\\':
+                    result.append("\\\\");
+                    break;
+
+                default:
+                    result.append("\\");
+
+                    unsigned char n = (unsigned char) ch;
+                    if (n < 10)
+                        result.append("00");
+                    else if (n < 100)
+                        result.append("0");
+
+                    result.append(std::to_string((unsigned char)ch));
+            };
+        };
+    };
+
+    result.append("\"");
+
+    return result;
+};
+
+std::string safetostringobj(lua_State* L, const TValue* obj, bool use_fixstring) {
+    std::string str;
+    switch (obj->tt) {
+        case LUA_TNIL:
+            str.assign("nil");
+            break;
+        case LUA_TBOOLEAN:
+            str.assign((bvalue(obj) ? "true" : "false"));
+            break;
+        case LUA_TNUMBER: {
+            double n = nvalue(obj);
+            char s[LUAI_MAXNUM2STR];
+            char* e = luai_num2str(s, n);
+            str = std::string(s, e - s);
+            break;
+        }
+        case LUA_TVECTOR: {
+            const float* v = vvalue(obj);
+
+            char s[LUAI_MAXNUM2STR * LUA_VECTOR_SIZE];
+            char* e = s;
+            for (int i = 0; i < LUA_VECTOR_SIZE; ++i) {
+                if (i != 0) {
+                    *e++ = ',';
+                    *e++ = ' ';
+                }
+                e = luai_num2str(e, v[i]);
+            }
+            str = std::string(s, e - s);
+            break;
+        }
+        case LUA_TSTRING:
+            if (use_fixstring)
+                str = fixString(std::string_view(tsvalue(obj)->data, tsvalue(obj)->len));
+            else
+                str = std::string(tsvalue(obj)->data, tsvalue(obj)->len);
+            break;
+        default: {
+            const void* ptr = ttype(obj) == LUA_TUSERDATA ? uvalue(obj)->data : ttype(obj) == LUA_TLIGHTUSERDATA ? pvalue(obj) : iscollectable(obj) ? gcvalue(obj) : nullptr;
+            unsigned long long enc = lua_encodepointer(L, uintptr_t(ptr));
+            static const char* fmt = "%s: 0x%016llx";
+            int size = snprintf(NULL, 0, fmt, lua_typename(L, obj->tt), enc);
+            str.resize(size);
+            snprintf(str.data(), size + 1, fmt, lua_typename(L, obj->tt), enc);
+            break;
+        }
+    }
+    return str;
+}
+std::string safetostring(lua_State* L, int index) {
+    return safetostringobj(L, luaA_toobject(L, index));
+}
 
 double luaL_checknumberrange(lua_State* L, int narg, double min, double max) {
     double n = luaL_checknumber(L, narg);
@@ -126,7 +261,12 @@ std::string getStackMessage(lua_State* L) {
 }
 
 int log(lua_State* L, Console::Message::Type type) {
-    TaskScheduler::getTaskFromThread(L)->console->log(getStackMessage(L), type);
+    std::string msg = getStackMessage(L);
+    auto& console = getTask(L)->console;
+    if (print_stdout && console->id != Tests)
+        printf("%s %.*s\n", Console::getMessageTypeString(type), static_cast<int>(msg.size()), msg.c_str());
+    else
+        console->log(msg, type);
     return 0;
 }
 // these functions are exposed in environment.cpp
@@ -148,6 +288,19 @@ void setfunctionfield(lua_State *L, lua_CFunction func, const char *method, cons
 }
 void setfunctionfield(lua_State *L, lua_CFunction func, const char *method, bool lookup) {
     setfunctionfield(L, func, method, nullptr, lookup);
+}
+
+std::string sha1ToString(unsigned int *hashed) {
+    char result[51] = "";
+    char buf[11];
+
+    for (int i = 0; i < 5; i++) {
+        snprintf(buf, sizeof(buf), "%010u", hashed[i]);
+
+        strncat(result, buf, sizeof(result) - strlen(result) - 1);
+    }
+
+    return result;
 }
 
 }; // namespace fakeroblox

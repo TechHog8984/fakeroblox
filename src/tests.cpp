@@ -5,8 +5,7 @@
 #include <shared_mutex>
 #include <variant>
 
-#include "libraries/tasklib.hpp"
-#include "console.hpp"
+#include "taskscheduler.hpp"
 
 #include "lua.h"
 #include "lualib.h"
@@ -19,13 +18,13 @@ namespace fakeroblox {
         { .name = "can spawn lua function", .value = canSpawnLuaFunction },
         { .name = "can spawn C function", .value = canSpawnCFunction },
 
-        { .name = "task.wait", .value = "local time_before = os.clock() \
-            local count = math.random(1, 8000) / 10000; \
-            print('waiting for ' .. count .. ' seconds') \
-            task.wait(count) \
-            local elapsed = (os.clock() - time_before) \
-            assert(elapsed >= count, 'not enough time was elapsed') \
-            print('waited for ' .. elapsed .. ' seconds')"
+        { .name = "task.wait", .value = "local time_before = os.clock()\n"
+            "local count = math.random(1, 8000) / 10000;\n"
+            "print('waiting for ' .. count .. ' seconds')\n"
+            "task.wait(count)\n"
+            "local elapsed = (os.clock() - time_before)\n"
+            "assert(elapsed >= count, 'not enough time was elapsed')\n"
+            "print('waited for ' .. elapsed .. ' seconds')"
         },
 
         { .name = "instance cache", .value = "assert(game.Workspace == workspace) "},
@@ -33,7 +32,7 @@ namespace fakeroblox {
         { .name = "instance method route", .value = "assert(game.children == game.GetChildren)" },
 
         { .name = "BindableEvent", .value = "local target = {} \
-            local upvalue\
+            local upvalue \
             local inst = Instance.new('BindableEvent') \
             inst.Event:Connect(function(...) upvalue = ... end) \
             assert(not upvalue) \
@@ -49,6 +48,28 @@ namespace fakeroblox {
             con:Disconnect() \
             assert(not con.Connected, 'Connected should be false after disconnection') \
         "},
+
+        { .name = "instance changed", .value = "local count = 0\n"
+            "local inst = Instance.new(\"Part\")\n"
+            "inst.Changed:Connect(function()\n"
+            "    print(111111)\n"
+            "    count += 1\n"
+            "end)\n"
+            "task.wait();"
+            "assert(count == 0)\n"
+            "inst.Name = \"Part\"\n"
+            "task.wait();"
+            "assert(count == 0)\n"
+            "inst.Name ..= 'a'\n"
+            "task.wait();"
+            "assert(count == 1)\n"
+            "inst.Name = \"Parta\"\n"
+            "task.wait();"
+            "assert(count == 1)\n"
+            "inst:Destroy()\n"
+            "task.wait();"
+            "assert(count == 2)\n"
+        },
 
         { .name = "Enum equality", .value = "assert(Enum.KeyCode == Enum.KeyCode) "},
         { .name = "EnumItem equality", .value = "assert(Enum.KeyCode.A == Enum.KeyCode.A)" },
@@ -95,8 +116,6 @@ namespace fakeroblox {
 
     // super cursed, sorry
     #define PASS "\1PASS"
-    #define PASS_ERROR "failed to start thread: " PASS
-    const int pass_error_length = strlen(PASS_ERROR);
 
     int finish_count = 0;
     bool fail = false;
@@ -150,7 +169,7 @@ namespace fakeroblox {
                 feedback_ran_list[i] = true;
 
                 auto& test = test_list[i];
-                if (error.size() == pass_error_length && error.rfind(PASS_ERROR, 0) == 0)
+                if (error == PASS)
                     Console::TestsConsole.debugf("Test '%s' passed!", test.name);
                 else {
                     fail = true;
@@ -161,16 +180,15 @@ namespace fakeroblox {
             if (std::holds_alternative<lua_CFunction>(test.value)) {
                 lua_pushcfunction(L, std::get<lua_CFunction>(test.value), test.name);
 
-                auto error = tryCreateThreadAndSpawnFunction(L, test_feedbacks[i], &Console::TestsConsole);
-                if (error) test_feedbacks[i](*error);
+                TaskScheduler::startFunctionOnNewThread(L, test_feedbacks[i], &Console::TestsConsole);
                 onFinish();
             } else {
-                auto error = tryRunCode(L, "TEST", std::get<std::string>(test.value).c_str(), test_feedbacks[i], [i] {
+                std::string& code = std::get<std::string>(test.value);
+                TaskScheduler::startCodeOnNewThread(L, "TEST", code.c_str(), code.length(), test_feedbacks[i], [i] {
                     if (!feedback_ran_list[i])
-                        test_feedbacks[i](PASS_ERROR);
+                        test_feedbacks[i](PASS);
                     onFinish();
                 }, &Console::TestsConsole);
-                if (error) test_feedbacks[i](*error);
             }
         }
     }

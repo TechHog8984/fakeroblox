@@ -3,23 +3,29 @@
 #include <cstring>
 #include <fstream>
 #include <queue>
+#include <shared_mutex>
 
+#include "common.hpp"
 #include "curl/curl.h"
 #include "raylib.h"
 #include "rlImGui.h"
 #include "imgui.h"
 
+#include "taskscheduler.hpp"
 #include "cli.hpp"
 #include "environment.hpp"
 #include "console.hpp"
 #include "tests.hpp"
+#include "fontloader.hpp"
+#include "imageloader.hpp"
 
 #include "ui/ui.hpp"
 #include "ui/drawentrylist.hpp"
 #include "ui/instanceexplorer.hpp"
 #include "ui/functionexplorer.hpp"
+#include "ui/imageexplorer.hpp"
+#include "ui/tableexplorer.hpp"
 
-#include "libraries/tasklib.hpp"
 #include "libraries/instructionlib.hpp"
 #include "libraries/drawentrylib.hpp"
 
@@ -28,9 +34,10 @@
 #include "classes/vector3.hpp"
 #include "classes/udim.hpp"
 #include "classes/udim2.hpp"
-#include "classes/roblox/camera.hpp"
-#include "classes/roblox/userinputservice.hpp"
 #include "classes/roblox/baseplayergui.hpp"
+#include "classes/roblox/camera.hpp"
+#include "classes/roblox/datamodel.hpp"
+#include "classes/roblox/userinputservice.hpp"
 
 #include "lua.h"
 #include "lualib.h"
@@ -88,7 +95,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::ifstream api_dump_file("Full-API-Dump.json");
+    std::ifstream api_dump_file("assets/Full-API-Dump.json");
     if (!api_dump_file) {
         fprintf(stderr, "ERROR: failed to open Full-API-Dump.json\n");
         return 1;
@@ -108,6 +115,8 @@ int main(int argc, char** argv) {
     lua_State* L = luaL_newstate();
     luaL_openlibs(L);
 
+    TaskScheduler::setup(L);
+
     Console::ScriptConsole.debugf("main state: %p", L);
 
     open_fakeroblox_environment(L);
@@ -118,7 +127,15 @@ int main(int argc, char** argv) {
     open_color3lib(L);
     open_udimlib(L);
     open_udim2lib(L);
-    open_drawentrylib(L);
+
+    initializeSharedPtrDestructorList();
+
+    lua_setuserdatadtor(L, LUA_TAG_SHAREDPTR_OBJECT, [](lua_State* L, void* ud) {
+        SharedPtrObject* object = static_cast<SharedPtrObject*>(ud);
+
+        sharedptr_destructor_list[object->class_index](object->object);
+        free(object->object);
+    });
 
     rbxInstanceSetup(L, api_dump);
 
@@ -130,6 +147,16 @@ int main(int argc, char** argv) {
     open_instructionlib(L);
     UI_FunctionExplorer_init(L);
 
+    SetTraceLogLevel(LOG_WARNING);
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+    InitWindow(800, 600, "fakeroblox");
+    SetExitKey(KEY_NULL);
+    SetTargetFPS(TaskScheduler::target_fps);
+
+    // load fonts before opening drawentry lib and after InitWindow. This means that we have to push some lua state stuff after window creation
+    FontLoader::load();
+    open_drawentrylib(L);
+
     lua_newtable(L);
     lua_setglobal(L, "shared");
 
@@ -138,30 +165,30 @@ int main(int argc, char** argv) {
     lua_getglobal(L, "shared");
     lua_setreadonly(L, -1, false);
 
-    auto appL_pair = createThread(L, [] (std::string error) { Console::ScriptConsole.error(error); });
-    lua_State* appL = appL_pair.first;
+    lua_State* appL = TaskScheduler::newThread(L, [] (std::string error) { Console::ScriptConsole.error(error); });
     lua_pop(L, 1);
     Console::ScriptConsole.debugf("app state: %p", appL);
 
-    auto testL_pair = createThread(L, [] (std::string error) { Console::TestsConsole.error(error); });
-    lua_State* testL = testL_pair.first;
+    lua_State* testL = TaskScheduler::newThread(L, [] (std::string error) { Console::TestsConsole.error(error); });
     lua_pop(L, 1);
     Console::ScriptConsole.debugf("test state: %p", testL);
+
+    lua_State* fontL = TaskScheduler::newThread(L, [] (std::string error) { Console::ScriptConsole.error(error); });
+    lua_pop(L, 1);
+    FontLoader::L = fontL;
+    Console::ScriptConsole.debugf("font state: %p", fontL);
 
     {
         char buf[100];
         snprintf(buf, 100, "App State (%p)", appL);
-        appL_pair.second->identifier.assign(buf);
+        getTask(appL)->identifier.assign(buf);
         snprintf(buf, 100, "Test State (%p)", testL);
-        testL_pair.second->identifier.assign(buf);
+        getTask(testL)->identifier.assign(buf);
+        snprintf(buf, 100, "Font State (%p)", fontL);
+        getTask(fontL)->identifier.assign(buf);
     }
 
-    SetTraceLogLevel(LOG_WARNING);
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    InitWindow(800, 600, "fakeroblox");
-    SetExitKey(KEY_NULL);
-    rlImGuiSetup(true);
-
+    // window items
     bool show_fps = false;
     bool menu_editor_open = true;
     bool menu_console_open = true;
@@ -170,6 +197,11 @@ int main(int argc, char** argv) {
     bool menu_drawentry_list_open = false;
     bool menu_instance_explorer_open = false;
     bool menu_function_explorer_open = false;
+
+    // debugging items
+    bool enable_user_input_service = true;
+    bool menu_image_explorer_open = false;
+    bool menu_table_explorer_open = false;
 
     bool all_tests_succeeded = false;
     bool has_tested = false;
@@ -180,9 +212,11 @@ int main(int argc, char** argv) {
 
     pushNewScriptEditorTab();
 
+    rlImGuiSetup(true);
     const double initial_game_time = lua_clock();
-    while (!WindowShouldClose()) {
-        UserInputService::process(appL);
+    while (!WindowShouldClose() && !DataModel::shutdown) {
+        if (enable_user_input_service)
+            UserInputService::process(appL);
 
         TaskScheduler::run();
 
@@ -197,9 +231,6 @@ int main(int argc, char** argv) {
         BeginDrawing();
         ClearBackground(DARKGRAY);
 
-        if (show_fps)
-            DrawFPS(30, 30);
-
         // gui object
         rbxInstance_BasePlayerGui_process(appL);
 
@@ -211,6 +242,11 @@ int main(int argc, char** argv) {
         const float imgui_frame_height = ImGui::GetFrameHeightWithSpacing();
 
         if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu("Options")) {
+                ImGui::MenuItem("print routes to stdout", nullptr, &print_stdout);
+
+                ImGui::EndMenu();
+            }
             if (ImGui::BeginMenu("Window")) {
                 ImGui::MenuItem("Show FPS", nullptr, &show_fps);
                 ImGui::Separator();
@@ -223,10 +259,18 @@ int main(int argc, char** argv) {
                 ImGui::MenuItem("DrawEntry List", nullptr, &menu_drawentry_list_open);
                 ImGui::Separator();
                 ImGui::MenuItem("Instance Explorer", nullptr, &menu_instance_explorer_open);
-                ImGui::MenuItem("Function Explorer", nullptr, &menu_function_explorer_open);
 
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu("Debugging")) {
+                ImGui::MenuItem("Enable User Input Service", nullptr, &enable_user_input_service);
+                ImGui::MenuItem("Function Explorer", nullptr, &menu_function_explorer_open);
+                ImGui::MenuItem("Table Explorer", nullptr, &menu_table_explorer_open);
+                ImGui::MenuItem("Image Explorer", nullptr, &menu_image_explorer_open);
+
+                ImGui::EndMenu();
+            }
+
             ImGui::EndMainMenuBar();
         }
 
@@ -258,11 +302,9 @@ int main(int argc, char** argv) {
                                 (void*) &tab.code
                             );
                             if (ImGui::Button("Execute")) {
-                                auto error = tryRunCode(appL, tab.name.c_str(), tab.code.c_str(), [] (std::string error){
+                                TaskScheduler::startCodeOnNewThread(L, tab.name.c_str(), tab.code.c_str(), tab.code.length(), [] (std::string error) {
                                     Console::ScriptConsole.error(error);
                                 });
-                                if (error.has_value())
-                                    Console::ScriptConsole.error(error.value());
                             }
                             ImGui::SameLine();
                             if (ImGui::Button("Clear"))
@@ -368,11 +410,14 @@ int main(int argc, char** argv) {
         }
         if (menu_thread_list_open) {
             if (ImGui::Begin("Thread List", &menu_thread_list_open)) {
-                std::queue<Task*> tasks_to_kill;
+                std::queue<lua_State*> threads_to_kill;
 
-                for (auto& pair : TaskScheduler::task_map) {
-                    Task* task = pair.second;
+                std::shared_lock lock(TaskScheduler::thread_list_mutex);
+                for (size_t i = 0; i < TaskScheduler::thread_list.size();i ++) {
+                    lua_State* thread = TaskScheduler::thread_list[i];
+                    Task* task = getTask(thread);
                     std::string identifier = task->identifier;
+
                     if (ImGui::Button(identifier.c_str()))
                         task->view.open = true;
                     if (task->view.open) {
@@ -381,15 +426,16 @@ int main(int argc, char** argv) {
                         if (ImGui::Begin(win_id.c_str(), &task->view.open)) {
                             ImGui::Text("status: %s", taskStatusTostring(task->status));
                             if (ImGui::Button("Kill"))
-                                tasks_to_kill.push(task);
+                                threads_to_kill.push(thread);
                             ImGui::End();
                         }
                     }
                 }
+                lock.unlock();
 
-                while (!tasks_to_kill.empty()) {
-                    TaskScheduler::killTask(tasks_to_kill.front());
-                    tasks_to_kill.pop();
+                while (!threads_to_kill.empty()) {
+                    TaskScheduler::killThread(threads_to_kill.front());
+                    threads_to_kill.pop();
                 }
             }
             ImGui::End();
@@ -404,11 +450,25 @@ int main(int argc, char** argv) {
                 UI_InstanceExplorer_render(appL);
             ImGui::End();
         }
+
         if (menu_function_explorer_open) {
-            if (ImGui::Begin("Function Explorer", &menu_function_explorer_open))
+            if (ImGui::Begin("Function Explorer", &menu_function_explorer_open, ImGuiWindowFlags_MenuBar))
                 UI_FunctionExplorer_render(appL);
             ImGui::End();
         }
+        if (menu_table_explorer_open) {
+            if (ImGui::Begin("Table Explorer", &menu_table_explorer_open, ImGuiWindowFlags_MenuBar))
+                UI_TableExplorer_render(appL);
+            ImGui::End();
+        }
+        if (menu_image_explorer_open) {
+            if (ImGui::Begin("Image Explorer", &menu_image_explorer_open))
+                UI_ImageExplorer_render(appL);
+            ImGui::End();
+        }
+
+        if (show_fps)
+            DrawFPS(30, 30);
 
         rlImGuiEnd();
 
@@ -419,17 +479,21 @@ int main(int argc, char** argv) {
             startAllTests(testL);
         }
 
-        workspace->setValue<double>(appL, "DistributedGameTime", lua_clock() - initial_game_time);
+        setValue<double>(workspace, appL, "DistributedGameTime", lua_clock() - initial_game_time);
     }
-
-    rlImGuiShutdown();
-    CloseWindow();
-
-    TaskScheduler::killTask(appL_pair.second);
-    TaskScheduler::killTask(testL_pair.second);
+    DataModel::onShutdown(appL);
 
     for (auto& entry : DrawEntry::draw_list)
         entry->free();
+
+    rlImGuiShutdown();
+    FontLoader::unload();
+    ImageLoader::unload();
+    CloseWindow();
+
+    TaskScheduler::killThread(appL);
+    TaskScheduler::killThread(testL);
+    TaskScheduler::killThread(fontL);
 
     TaskScheduler::cleanup();
     rbxInstanceCleanup(appL);

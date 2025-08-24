@@ -2,14 +2,14 @@
 #include "common.hpp"
 
 #include <cstring>
-#include <raylib.h>
 
+#include "lnumutils.h"
 #include "lua.h"
 #include "lualib.h"
 
 namespace fakeroblox {
 
-int pushVector2(lua_State* L, double x, double y) {
+int pushVector2(lua_State* L, float x, float y) {
     Vector2* vector2 = static_cast<Vector2*>(lua_newuserdata(L, sizeof(Vector2)));
     vector2->x = x;
     vector2->y = y;
@@ -24,8 +24,8 @@ int pushVector2(lua_State* L, Vector2 vector2) {
 }
 
 static int Vector2_new(lua_State* L) {
-    double x = luaL_optnumber(L, 1, 0);
-    double y = luaL_optnumber(L, 2, 0);
+    float x = luaL_optnumber(L, 1, 0);
+    float y = luaL_optnumber(L, 2, 0);
 
     return pushVector2(L, x, y);
 }
@@ -37,14 +37,14 @@ Vector2* lua_checkvector2(lua_State* L, int narg) {
 }
 
 static int Vector2__tostring(lua_State* L) {
-    Vector2* vector2 = static_cast<Vector2*>(luaL_checkudata(L, 1, "Vector2"));
+    Vector2* vector2 = lua_checkvector2(L, 1);
 
     lua_pushfstringL(L, "%.f, %.f", vector2->x, vector2->y);
     return 1;
 }
 
 static int Vector2__index(lua_State* L) {
-    Vector2* vector2 = static_cast<Vector2*>(luaL_checkudata(L, 1, "Vector2"));
+    Vector2* vector2 = lua_checkvector2(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     // FIXME: methods
@@ -69,7 +69,7 @@ static int Vector2__index(lua_State* L) {
     luaL_error(L, "%s is not a valid member of Vector2", key);
 }
 static int Vector2__newindex(lua_State* L) {
-    // Vector2* vector2 = static_cast<Vector2*>(luaL_checkudata(L, 1, "Vector2"));
+    // Vector2* vector2 = lua_checkvector2(L, 1);
     luaL_checkudata(L, 1, "Vector2");
     const char* key = luaL_checkstring(L, 2);
 
@@ -91,7 +91,7 @@ static int Vector2__newindex(lua_State* L) {
     return 0;
 }
 static int Vector2__namecall(lua_State* L) {
-    // Vector2* vector2 = static_cast<Vector2*>(luaL_checkudata(L, 1, "Vector2"));
+    // Vector2* vector2 = lua_checkvector2(L, 1);
     luaL_checkudata(L, 1, "Vector2");
     const char* namecall = lua_namecallatom(L, nullptr);
     if (!namecall)
@@ -103,28 +103,55 @@ static int Vector2__namecall(lua_State* L) {
 }
 
 static int Vector2__add(lua_State* L) {
-    Vector2* a = static_cast<Vector2*>(luaL_checkudata(L, 1, "Vector2"));
-    Vector2* b = static_cast<Vector2*>(luaL_checkudata(L, 2, "Vector2"));
+    Vector2* a = lua_checkvector2(L, 1);
+    Vector2* b = lua_checkvector2(L, 2);
 
     return pushVector2(L, a->x + b->x, a->y + b->y);
 }
 static int Vector2__sub(lua_State* L) {
-    Vector2* a = static_cast<Vector2*>(luaL_checkudata(L, 1, "Vector2"));
-    Vector2* b = static_cast<Vector2*>(luaL_checkudata(L, 2, "Vector2"));
+    Vector2* a = lua_checkvector2(L, 1);
+    Vector2* b = lua_checkvector2(L, 2);
 
     return pushVector2(L, a->x - b->x, a->y - b->y);
 }
 static int Vector2__mul(lua_State* L) {
-    Vector2* vector2 = static_cast<Vector2*>(luaL_checkudata(L, 1, "Vector2"));
-    double scalar = luaL_checknumber(L, 2);
+    Vector2* a = lua_checkvector2(L, 1);
+    luaL_argcheck(L, lua_isnumber(L, 2) || lua_isuserdata(L, 2), 2, "expected number or userdata for Vector2 mul");
+    if (lua_isnumber(L, 2)) {
+        float scalar = luaL_checknumber(L, 2);
 
-    return pushVector2(L, vector2->x * scalar, vector2->y * scalar);
+        return pushVector2(L, a->x * scalar, a->y * scalar);
+    }
+
+    Vector2* b = lua_checkvector2(L, 2);
+
+    return pushVector2(L, a->x * b->x, a->y * b->y);
 }
 static int Vector2__div(lua_State* L) {
-    Vector2* vector2 = static_cast<Vector2*>(luaL_checkudata(L, 1, "Vector2"));
-    double scalar = luaL_checknumber(L, 2);
+    Vector2* a = lua_checkvector2(L, 1);
+    luaL_argcheck(L, lua_isnumber(L, 2) || lua_isuserdata(L, 2), 2, "expected number or userdata for Vector2 div");
+    if (lua_isnumber(L, 2)) {
+        float scalar = luaL_checknumber(L, 2);
 
-    return pushVector2(L, vector2->x / scalar, vector2->y / scalar);
+        return pushVector2(L, a->x / scalar, a->y / scalar);
+    }
+
+    Vector2* b = lua_checkvector2(L, 2);
+
+    return pushVector2(L, a->x / b->x, a->y / b->y);
+}
+static int Vector2__idiv(lua_State* L) {
+    Vector2* a = lua_checkvector2(L, 1);
+    luaL_argcheck(L, lua_isnumber(L, 2) || lua_isuserdata(L, 2), 2, "expected number or userdata for Vector2 idiv");
+    if (lua_isnumber(L, 2)) {
+        float scalar = luaL_checknumber(L, 2);
+
+        return pushVector2(L, luai_numidiv(a->x, scalar), luai_numidiv(a->y, scalar));
+    }
+
+    Vector2* b = lua_checkvector2(L, 2);
+
+    return pushVector2(L, luai_numidiv(a->x, b->x), luai_numidiv(a->y, b->y));
 }
 
 void open_vector2lib(lua_State *L) {
@@ -146,6 +173,7 @@ void open_vector2lib(lua_State *L) {
     setfunctionfield(L, Vector2__sub, "__sub");
     setfunctionfield(L, Vector2__mul, "__mul");
     setfunctionfield(L, Vector2__div, "__div");
+    setfunctionfield(L, Vector2__idiv, "__idiv");
 
     lua_pop(L, 1);
 }

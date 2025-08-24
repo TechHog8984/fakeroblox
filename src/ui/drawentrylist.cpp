@@ -1,4 +1,5 @@
 #include "ui/drawentrylist.hpp"
+#include "fontloader.hpp"
 #include "imgui.h"
 #include "ui/ui.hpp"
 
@@ -14,7 +15,7 @@ void UI_DrawEntryList_render(lua_State *L) {
     // "Create" button
     {
         static int item = 0;
-        const char* item_list[] = { "Line", "Text", "Image", "Circle", "Square", "Triangle", "Quad" };
+        static const char* item_list[] = { "Line", "Text", "Image", "Circle", "Square", "Triangle", "Quad" };
 
         if (ImGui::Button("Create")) {
             pushNewDrawEntry(L, item_list[item]);
@@ -23,11 +24,15 @@ void UI_DrawEntryList_render(lua_State *L) {
 
         ImGui::SameLine();
         ImGui::Combo("ClassName", &item, item_list, IM_ARRAYSIZE(item_list));
+
+        if (ImGui::Button("Clear"))
+            DrawEntry::clear(L);
     }
 
     ImGui::BeginChild("DrawEntry List##chooser", ImVec2{ImGui::GetContentRegionAvail().x * 0.25f, ImGui::GetContentRegionAvail().y}, ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
     bool chosen_still_exists = false;
 
+    DrawEntry* entry_to_clone = nullptr;
     std::shared_lock draw_list_lock(DrawEntry::draw_list_mutex);
     for (auto& entry : DrawEntry::draw_list) {
         bool is_selected = drawentry_list_chosen && entry == drawentry_list_chosen;
@@ -45,20 +50,23 @@ void UI_DrawEntryList_render(lua_State *L) {
         }
         if (ImGui::BeginPopupContextItem()) {
             ImGui::Checkbox("Visible", &entry->visible);
-            // TODO: DrawEntry clone
-            // if (ImGui::Button("Clone"))
-            //     entry->clone();
             if (ImGui::Button("Destroy")) {
                 draw_list_lock.unlock();
                 entry->destroy(L);
                 draw_list_lock.lock();
-            }
+            } else if (ImGui::Button("Clone"))
+                entry_to_clone = entry;
             ImGui::EndPopup();
         }
 
         ImGui::PopID();
     }
     draw_list_lock.unlock();
+
+    if (entry_to_clone) {
+        chosen_still_exists = true;
+        drawentry_list_chosen = entry_to_clone->clone(L);
+    }
 
     if (!chosen_still_exists)
         drawentry_list_chosen = nullptr;
@@ -83,7 +91,7 @@ void UI_DrawEntryList_render(lua_State *L) {
         ImGui_Color4("Color", entry->color);
 
         switch (entry->type) {
-            case DrawEntry::Line: {
+            case DrawEntry::DrawTypeLine: {
                 DrawEntryLine* entry_line = static_cast<DrawEntryLine*>(entry);
 
                 ImGui::DragScalar("Thickness", ImGuiDataType_Double, &entry_line->thickness);
@@ -93,16 +101,24 @@ void UI_DrawEntryList_render(lua_State *L) {
 
                 break;
             }
-            case DrawEntry::Text: {
+            case DrawEntry::DrawTypeText: {
                 DrawEntryText* entry_text = static_cast<DrawEntryText*>(entry);
 
-                // NOTE: explicitly call updateTextBounds because it is usually lazy evaluated via __newindex
+                // NOTE: explicitly call updateTextBounds because it is usually lazy evaluated via __newindex, and we currently have no way to tell when the string gets updated
                 entry_text->updateTextBounds();
 
                 ImGui_STDString("Text", entry_text->text);
                 ImGui::Text("%.f, %.f - TextBounds", entry_text->text_bounds.x, entry_text->text_bounds.y);
                 ImGui::DragScalar("TextSize", ImGuiDataType_Double, &entry_text->text_size);
-                // TODO: fonts (don't work yet)
+
+                std::vector<const char*> font_list;
+                font_list.reserve(FontLoader::font_name_list.size());
+
+                for (size_t i = 0; i < FontLoader::font_name_list.size(); i++)
+                    font_list.push_back(FontLoader::font_name_list[i].c_str());
+                if (ImGui::Combo("Font", reinterpret_cast<int*>(&entry_text->font_index), font_list.data(), FontLoader::font_count))
+                    entry_text->updateFont();
+
                 ImGui::Checkbox("Centered", &entry_text->centered);
                 ImGui::Checkbox("Outlined", &entry_text->outlined);
                 ImGui_Color4("Outline Color", entry_text->outline_color);
@@ -110,7 +126,17 @@ void UI_DrawEntryList_render(lua_State *L) {
 
                 break;
             }
-            case DrawEntry::Circle: {
+            case DrawEntry::DrawTypeImage: {
+                DrawEntryImage* entry_image = static_cast<DrawEntryImage*>(entry);
+
+                ImGui::Text("%.f, %.f - ImageSize", entry_image->image_size.x, entry_image->image_size.y);
+                ImGui_DragVector2("Size", entry_image->size);
+                ImGui_DragVector2("Position", entry_image->position);
+                ImGui::DragScalar("Rounding", ImGuiDataType_Double, &entry_image->rounding);
+
+                break;
+            }
+            case DrawEntry::DrawTypeCircle: {
                 DrawEntryCircle* entry_circle = static_cast<DrawEntryCircle*>(entry);
 
                 // TODO: thickness (doesn't work yet)
@@ -122,7 +148,7 @@ void UI_DrawEntryList_render(lua_State *L) {
 
                 break;
             }
-            case DrawEntry::Square: {
+            case DrawEntry::DrawTypeSquare: {
                 DrawEntrySquare* entry_square = static_cast<DrawEntrySquare*>(entry);
 
                 ImGui::DragScalar("Thickness", ImGuiDataType_Double, &entry_square->thickness);
@@ -141,7 +167,7 @@ void UI_DrawEntryList_render(lua_State *L) {
 
                 break;
             }
-            case DrawEntry::Triangle: {
+            case DrawEntry::DrawTypeTriangle: {
                 DrawEntryTriangle* entry_triangle = static_cast<DrawEntryTriangle*>(entry);
 
                 ImGui::DragScalar("Thickness", ImGuiDataType_Double, &entry_triangle->thickness);
@@ -152,7 +178,7 @@ void UI_DrawEntryList_render(lua_State *L) {
 
                 break;
             }
-            case DrawEntry::Quad: {
+            case DrawEntry::DrawTypeQuad: {
                 DrawEntryQuad* entry_quad = static_cast<DrawEntryQuad*>(entry);
 
                 ImGui::DragScalar("Thickness", ImGuiDataType_Double, &entry_quad->thickness);
@@ -172,11 +198,10 @@ void UI_DrawEntryList_render(lua_State *L) {
 
         ImGui::SeparatorText("Methods");
 
-        if (ImGui::Button("Destroy")) {
-            draw_list_lock.unlock();
+        if (ImGui::Button("Destroy"))
             entry->destroy(L);
-            // lock.lock(); // commented out because there's no code after this
-        }
+        else if (ImGui::Button("Clone"))
+            drawentry_list_chosen = entry->clone(L);
 
         ImGui::EndChild();
     }

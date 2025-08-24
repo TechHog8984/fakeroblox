@@ -26,6 +26,6 @@ int fireRBXScriptSignalWithFilter(lua_State* L);
 // push signal
 int disconnectAllRBXScriptSignal(lua_State* L);
 
-void setup_rbxscriptsignal(lua_State* L);
+void setup_rbxScriptSignal(lua_State* L);
 
 }; // namespace fakeroblox

@@ -9,9 +9,14 @@ void rbxScriptConnection::destroy(lua_State* L) {
     if (!alive)
         return;
 
+    // FIXME: we can't directly do this for situations such as the same function being used for two connections;
+    // we need to employ behavior similar to shared_ptr here.
+    // Perhaps METHODLOOKUP's array will be used to store a method's designated count.
+    // When a count hits zero, then we do this.
     lua_getfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
     lua_pushnil(L);
     lua_rawseti(L, -2, function_index);
+    lua_pop(L, 1);
 
     alive = false;
 }
@@ -96,7 +101,7 @@ static int rbxScriptConnection__namecall(lua_State* L) {
     return func(L);
 }
 
-void setup_rbxscriptconnection(lua_State *L) {
+void setup_rbxScriptConnection(lua_State *L) {
     luaL_newmetatable(L, "RBXScriptConnection");
 
     setfunctionfield(L, rbxScriptConnection__tostring, "__tostring", nullptr);

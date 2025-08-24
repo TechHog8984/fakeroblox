@@ -2,8 +2,6 @@
 
 #include "classes/udim.hpp"
 
-#include <raylib.h>
-
 #include "lua.h"
 
 namespace fakeroblox {

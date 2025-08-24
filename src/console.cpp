@@ -4,26 +4,39 @@
 
 namespace fakeroblox {
 
-Console::Console(bool show_info, bool show_warning, bool show_error, bool show_debug)
-    : show_info(show_info), show_warning(show_warning), show_error(show_error), show_debug(show_debug) {};
+Console::Console(ConsoleId id, bool show_info, bool show_warning, bool show_error, bool show_debug)
+    : id(id), show_info(show_info), show_warning(show_warning), show_error(show_error), show_debug(show_debug) {};
 
-Console Console::ScriptConsole;
-Console Console::TestsConsole(true, true, true, true);
+Console Console::ScriptConsole(Script);
+Console Console::TestsConsole(Tests, true, true, true, true);
 
 ImVec4 Console::ColorINFO = {1, 1, 1, 1};
 ImVec4 Console::ColorWARNING = {1, 1, 0, 1};
 ImVec4 Console::ColorERROR = {1, 0, 0, 1};
 ImVec4 Console::ColorDEBUG = {1, 0, 1, 1};
 
+const char* Console::getMessageTypeString(Message::Type type) {
+    switch (type) {
+        case Message::INFO:
+            return "[INFO]";
+        case Message::WARNING:
+            return "[WARNING]";
+        case Message::ERROR:
+            return "[ERROR]";
+        case Message::DEBUG:
+            return "[DEBUG]";
+    }
+    return nullptr;
+}
+
 void Console::clear() {
     std::lock_guard lock(mutex);
-    message_count = 0;
     messages.clear();
 }
 
 void Console::renderMessages() {
     std::shared_lock lock(mutex);
-    for (size_t i = 0; i < message_count; i++) {
+    for (size_t i = 0; i < messages.size(); i++) {
         bool skip = false;
         auto& message = messages[i];
         ImVec4 color;
@@ -63,7 +76,6 @@ void Console::renderMessages() {
 
 void Console::log(std::string message, Message::Type type) {
     std::lock_guard lock(mutex);
-    message_count++;
     messages.push_back({ .type = type, .content = message });
 }
 

@@ -11,6 +11,6 @@ public:
 };
 
 void rbxInstance_Camera_updateViewport(lua_State* L);
-void rbxInstance_Camera_init(lua_State* L, rbxInstance* workspace);
+void rbxInstance_Camera_init(lua_State* L, std::shared_ptr<rbxInstance> workspace);
 
 }; // namespace fakeroblox
