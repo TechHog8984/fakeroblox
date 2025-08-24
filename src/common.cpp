@@ -29,6 +29,7 @@ void initializeSharedPtrDestructorList() {
         };                                                                           \
     }
 
+    // i created all this because I thought Tasks would do the same thing, but then I realized I could just use states and the userthread callback, so now it's just rbxInstance
     addConstructor(rbxInstance)
 
     #undef addConstructor
@@ -90,6 +91,7 @@ std::string fixString(std::string_view original) {
     return result;
 };
 
+// from Luau/VM/src/laux.cpp
 std::string safetostringobj(lua_State* L, const TValue* obj, bool use_fixstring) {
     std::string str;
     switch (obj->tt) {

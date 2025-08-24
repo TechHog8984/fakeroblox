@@ -2,6 +2,8 @@
 
 // CREDITS TO luau/Ast/include/Luau/Ast.h
 
+namespace fakeroblox {
+
 extern int type_registry_index;
 
 template<typename T>
@@ -16,3 +18,5 @@ const int TypeRegistration<T>::value = ++type_registry_index;
     static int class_index() { \
         return TypeRegistration<Class>::value; \
     }
+
+}; // namespace fakeroblox

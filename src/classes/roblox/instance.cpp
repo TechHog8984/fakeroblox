@@ -115,6 +115,7 @@ void destroyInstance(lua_State* L, std::shared_ptr<rbxInstance> instance, bool d
     lua_pushlightuserdata(L, instance.get());
     lua_pushnil(L);
     lua_rawset(L, -3);
+    lua_pop(L, 1);
 }
 std::shared_ptr<rbxInstance> rbxInstance::findFirstChild(std::string name) {
     std::lock_guard children_lock(children_mutex);

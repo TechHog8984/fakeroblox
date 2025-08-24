@@ -65,6 +65,8 @@ class TaskScheduler {
     static void resumeThread(lua_State* thread);
     static void killThreadUnlocked(lua_State* thread);
 public:
+    static bool sandboxing;
+
     static void setup(lua_State* L);
 
     static std::vector<lua_State*> thread_list;

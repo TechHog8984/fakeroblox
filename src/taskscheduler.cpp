@@ -38,6 +38,8 @@ const char* taskStatusTostring(TaskStatus status) {
     }
 };
 
+bool TaskScheduler::sandboxing = true;
+
 int TaskScheduler::target_fps = 240;
 std::shared_mutex TaskScheduler::target_fps_mutex;
 
@@ -104,7 +106,8 @@ void TaskScheduler::setup(lua_State *L) {
 
 lua_State* TaskScheduler::newThread(lua_State* L, Feedback feedback, OnKill on_kill) {
     lua_State* thread = lua_newthread(L);
-    luaL_sandboxthread(thread);
+    if (sandboxing)
+        luaL_sandboxthread(thread);
 
     Task* task = getTask(thread);
     task->ref = lua_ref(L, -1);
@@ -455,7 +458,7 @@ int fr_task_defer(lua_State* L) {
 }
 
 int fr_task_delay(lua_State* L) {
-    auto result = *preTaskSpawn(L, "delay", 0);
+    auto result = *preTaskSpawn(L, "delay", 1);
 
     const double seconds = getSeconds(L);
     lua_remove(L, 1);

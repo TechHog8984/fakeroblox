@@ -9,6 +9,7 @@
 
 #include "lobject.h"
 #include "lua.h"
+#include "type_registry.hpp"
 
 using json = nlohmann::json;
 
@@ -59,12 +60,17 @@ int pushFunctionFromLookup(lua_State* L, lua_CFunction func, const char* name = 
 int addToLookup(lua_State *L, std::function<void()> pushValue, bool keep_value = false);
 
 template<class T>
+void pushNewSharedPtrObject(lua_State* L, std::shared_ptr<T>& ptr) {
+    SharedPtrObject* object = static_cast<SharedPtrObject*>(lua_newuserdatatagged(L, sizeof(SharedPtrObject), LUA_TAG_SHAREDPTR_OBJECT));
+    object->class_index = T::class_index();
+    object->object = malloc(sizeof(std::shared_ptr<T>));
+    new(object->object) std::shared_ptr<T>(ptr);
+}
+
+template<class T>
 int pushFromSharedPtrLookup(lua_State* L, const char* lookup, std::shared_ptr<T>& ptr, std::function<void(void)> initialize) {
     return pushFromLookup(L, lookup, ptr.get(), [&L, &ptr, &initialize](){
-        SharedPtrObject* object = static_cast<SharedPtrObject*>(lua_newuserdatatagged(L, sizeof(SharedPtrObject), LUA_TAG_SHAREDPTR_OBJECT));
-        object->class_index = T::class_index();
-        object->object = malloc(sizeof(std::shared_ptr<T>));
-        new(object->object) std::shared_ptr<T>(ptr);
+        pushNewSharedPtrObject(L, ptr);
 
         initialize();
     });
@@ -87,9 +93,9 @@ std::string getStackMessage(lua_State* L);
 int fr_print(lua_State* L);
 int fr_warn(lua_State* L);
 
-// if you keep lookup as false, NOTE that ProtoExplorer will ensure functions are in the lookup when explored
+// if you keep lookup as false, NOTE that FunctionExplorer will ensure functions are in the lookup when explored
 void setfunctionfield(lua_State* L, lua_CFunction func, const char* method, const char* debugname, bool lookup = false);
-// if you keep lookup as false, NOTE that ProtoExplorer will ensure functions are in the lookup when explored
+// if you keep lookup as false, NOTE that FunctionExplorer will ensure functions are in the lookup when explored
 void setfunctionfield(lua_State* L, lua_CFunction func, const char* method, bool lookup = false);
 
 std::string sha1ToString(unsigned int* hashed);

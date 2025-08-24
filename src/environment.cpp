@@ -18,11 +18,6 @@
 
 namespace fakeroblox {
 
-#define expose(func) {                       \
-    lua_pushcfunction(L, fr_##func, #func);  \
-    lua_setglobal(L, #func);                 \
-}
-
 static int fr_getreg(lua_State* L) {
     lua_pushvalue(L, LUA_REGISTRYINDEX);
     return 1;
@@ -89,7 +84,6 @@ static int fr_getgc(lua_State* L) {
     return 1;
 }
 
-// from Luau/VM/src/laux.cpp
 static int fr_safetostring(lua_State* L) {
     luaL_checkany(L, 1);
     std::string str = safetostring(L, 1);
@@ -185,6 +179,20 @@ static int fr_getfpscap(lua_State* L) {
     return 1;
 }
 
+static int fr_getgenv(lua_State* L) {
+    if (TaskScheduler::sandboxing)
+        luaL_error(L, "you cannot use getgenv while sandboxing is enabled! rerun fakeroblox with the --nosandbox flag");
+
+    // TODO: should this be environindex ?? i have no idea
+    lua_pushvalue(L, LUA_GLOBALSINDEX);
+    return 1;
+}
+static int fr_getrenv(lua_State* L) {
+    // TODO: getrenv; should essentially be shared but with all environment values (__index = environment maybe); should be one specific table we keep in registry or something
+    lua_newtable(L);
+    return 1;
+}
+
 void open_fakeroblox_environment(lua_State *L) {
     // methodlookup
     lua_newtable(L);
@@ -199,23 +207,26 @@ void open_fakeroblox_environment(lua_State *L) {
     lua_pushcfunction(L, fr_warn, "warn");
     lua_setglobal(L, "warn");
 
-    expose(getreg)
-    expose(getgc)
+    env_expose(getreg)
+    env_expose(getgc)
 
-    expose(safetostring)
+    env_expose(safetostring)
 
-    expose(loadstring)
+    env_expose(loadstring)
 
-    expose(gcstep);
-    expose(gcfull);
+    env_expose(gcstep)
+    env_expose(gcfull)
 
-    expose(base64encode);
-    expose(base64decode);
+    env_expose(base64encode)
+    env_expose(base64decode)
 
-    expose(iswindowactive);
+    env_expose(iswindowactive)
 
-    expose(setfpscap);
-    expose(getfpscap);
+    env_expose(setfpscap)
+    env_expose(getfpscap)
+
+    env_expose(getgenv)
+    env_expose(getrenv)
 
     lua_getglobal(L, "table");
     lua_pushcfunction(L, fr_rawtfreeze, "rawfreeze");

@@ -7,6 +7,7 @@
 
 #include "common.hpp"
 #include "curl/curl.h"
+#include "libraries/cachelib.hpp"
 #include "raylib.h"
 #include "rlImGui.h"
 #include "imgui.h"
@@ -86,10 +87,12 @@ int main(int argc, char** argv) {
 
     for (unsigned i = 1; i < (unsigned) argc; i++) {
         const char* arg = argv[i];
-        if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
+        if (strequal(arg, "-h") || strequal(arg, "--help")) {
             displayHelp();
             return 0;
-        } else {
+        } else if (strequal(arg, "--nosandbox"))
+            TaskScheduler::sandboxing = false;
+        else {
             fprintf(stderr, "ERROR: unrecognized option '%s'\n", arg);
             return 1;
         }
@@ -145,6 +148,7 @@ int main(int argc, char** argv) {
 
     // the following need to happen after rbxInstance setup
     open_instructionlib(L);
+    open_cachelib(L);
     UI_FunctionExplorer_init(L);
 
     SetTraceLogLevel(LOG_WARNING);
@@ -160,7 +164,8 @@ int main(int argc, char** argv) {
     lua_newtable(L);
     lua_setglobal(L, "shared");
 
-    luaL_sandbox(L);
+    if (TaskScheduler::sandboxing)
+        luaL_sandbox(L);
 
     lua_getglobal(L, "shared");
     lua_setreadonly(L, -1, false);
@@ -243,6 +248,10 @@ int main(int argc, char** argv) {
 
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("Options")) {
+                ImGui::BeginDisabled();
+                ImGui::Text("sandboxing - %s", TaskScheduler::sandboxing ? "enabled" : "disabled");
+                ImGui::EndDisabled();
+
                 ImGui::MenuItem("print routes to stdout", nullptr, &print_stdout);
 
                 ImGui::EndMenu();
@@ -302,9 +311,13 @@ int main(int argc, char** argv) {
                                 (void*) &tab.code
                             );
                             if (ImGui::Button("Execute")) {
-                                TaskScheduler::startCodeOnNewThread(L, tab.name.c_str(), tab.code.c_str(), tab.code.length(), [] (std::string error) {
-                                    Console::ScriptConsole.error(error);
-                                });
+                                try {
+                                    TaskScheduler::startCodeOnNewThread(L, tab.name.c_str(), tab.code.c_str(), tab.code.length(), [] (std::string error) {
+                                        Console::ScriptConsole.error(error);
+                                    });
+                                } catch(std::exception& e) {
+                                    Console::ScriptConsole.error(e.what());
+                                }
                             }
                             ImGui::SameLine();
                             if (ImGui::Button("Clear"))
