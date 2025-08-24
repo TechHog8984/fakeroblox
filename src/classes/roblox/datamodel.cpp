@@ -78,7 +78,7 @@ namespace rbxInstance_DataModel_methods {
             return 1;
         });
     }
-};
+}; // namespace rbxInstance_DataModel_methods
 
 void rbxInstance_DataModel_init(lua_State* L) {
     lua_newtable(L);

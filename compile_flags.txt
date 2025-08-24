@@ -3,6 +3,8 @@
 -Iinclude
 -Idependencies/json/include
 -Idependencies/curl/include
+-Idependencies/simde
+-Idependencies/uuid_v4
 
 -Idependencies/Luau/Analysis/include
 -Idependencies/Luau/Ast/include

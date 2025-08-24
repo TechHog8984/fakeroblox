@@ -5,6 +5,7 @@
 #include <queue>
 #include <shared_mutex>
 
+#include "classes/roblox/runservice.hpp"
 #include "common.hpp"
 #include "curl/curl.h"
 #include "libraries/cachelib.hpp"
@@ -205,6 +206,7 @@ int main(int argc, char** argv) {
 
     // debugging items
     bool enable_user_input_service = true;
+    bool enable_run_service = true;
     bool menu_image_explorer_open = false;
     bool menu_table_explorer_open = false;
 
@@ -222,6 +224,8 @@ int main(int argc, char** argv) {
     while (!WindowShouldClose() && !DataModel::shutdown) {
         if (enable_user_input_service)
             UserInputService::process(appL);
+        if (enable_run_service)
+            RunService::process(appL);
 
         TaskScheduler::run();
 
@@ -272,7 +276,8 @@ int main(int argc, char** argv) {
                 ImGui::EndMenu();
             }
             if (ImGui::BeginMenu("Debugging")) {
-                ImGui::MenuItem("Enable User Input Service", nullptr, &enable_user_input_service);
+                ImGui::MenuItem("Enable UserInputService", nullptr, &enable_user_input_service);
+                ImGui::MenuItem("Enable RunService", nullptr, &enable_run_service);
                 ImGui::MenuItem("Function Explorer", nullptr, &menu_function_explorer_open);
                 ImGui::MenuItem("Table Explorer", nullptr, &menu_table_explorer_open);
                 ImGui::MenuItem("Image Explorer", nullptr, &menu_image_explorer_open);

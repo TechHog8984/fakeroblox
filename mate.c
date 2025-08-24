@@ -6,11 +6,11 @@ int main() {
 
     ExecutableOptions executable_options = {
         .output = "fakeroblox",
-        .flags = "-std=c++17 -Wall -Werror -g"
+        .flags = "-std=c++17 -Wall -Wno-psabi -Werror -g"
     };
     Executable executable = CreateExecutable(executable_options);
 
-    AddIncludePaths(executable, "./include", "./dependencies/json/include", "./dependencies/curl/include");
+    AddIncludePaths(executable, "./include", "./dependencies/json/include", "./dependencies/curl/include", "./dependencies/simde", "./dependencies/uuid_v4");
 
     AddFile(executable, "./src/*.cpp");
     AddFile(executable, "./src/classes/*.cpp");

@@ -10,3 +10,6 @@
 [submodule "dependencies/curl"]
 	path = dependencies/curl
 	url = https://github.com/curl/curl
+[submodule "dependencies/simde"]
+	path = dependencies/simde
+	url = https://github.com/simd-everywhere/simde.git

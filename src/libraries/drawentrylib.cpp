@@ -420,12 +420,15 @@ static int DrawEntry__index(lua_State* L) {
                     lua_pushnumber(L, entry_text->text_size);
                 else if (strequal(key, "Font"))
                     lua_pushunsigned(L, entry_text->font_index);
-                else if (strequal(key, "Centered"))
+                else if (strequal(key, "Centered") || strequal(key, "Center"))
                     lua_pushboolean(L, entry_text->centered);
-                else if (strequal(key, "Outlined"))
+                else if (strequal(key, "Outlined") || strequal(key, "Outline"))
                     lua_pushboolean(L, entry_text->outlined);
                 else if (strequal(key, "OutlineColor"))
                     pushColor(L, entry_text->outline_color);
+                // NOTE: OutlineOpacity is a temp fix for unnamed esp
+                else if (strequal(key, "OutlineOpacity"))
+                    lua_pushnumber(L, entry_text->outline_color.a / 255.0);
                 else if (strequal(key, "Position"))
                     pushVector2(L, entry_text->position);
                 else
@@ -598,13 +601,16 @@ static int DrawEntry__newindex(lua_State* L) {
                         entry_text->font_index = luaL_checknumberrange(L, 3, 0, FontLoader::font_count - 1);
                         entry_text->updateFont();
                     }
-                } else if (strequal(key, "Centered"))
+                } else if (strequal(key, "Centered") || strequal(key, "Center"))
                     entry_text->centered = luaL_checkboolean(L, 3);
-                else if (strequal(key, "Outlined"))
+                else if (strequal(key, "Outline") || strequal(key, "Outlined"))
                     entry_text->outlined = luaL_checkboolean(L, 3);
                 else if (strequal(key, "OutlineColor")) {
                     entry_text->outline_color = *lua_checkcolor(L, 3);
                     entry_text->outline_color.a = entry->color.a;
+                // NOTE: OutlineOpacity is a temp fix for unnamed esp
+                } else if (strequal(key, "OutlineOpacity")) {
+                    entry_text->outline_color.a = luaL_checknumberrange(L, 3, 0, 1) * 255.0;
                 } else if (strequal(key, "Position")) {
                     entry_text->position = *lua_checkvector2(L, 3);
                     entry_text->updateOutline();

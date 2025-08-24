@@ -1,4 +1,5 @@
-local coregui = game:GetService("CoreGui")
+-- local coregui = game:GetService("CoreGui")
+local coregui = gethui()
 coregui:ClearAllChildren()
 
 local gui = Instance.new("ScreenGui")

@@ -45,6 +45,7 @@ static int Vector3__tostring(lua_State* L) {
     return 1;
 }
 
+#define MAGNITUDE(vector3) (sqrt(vector3->x * vector3->x + vector3->y * vector3->y + vector3->z * vector3->z))
 static int Vector3__index(lua_State* L) {
     Vector3* vector3 = lua_checkvector3(L, 1);
     const char* key = luaL_checkstring(L, 2);
@@ -67,13 +68,21 @@ static int Vector3__index(lua_State* L) {
             default:
                 goto INVALID;
         }
-    }
+    } else if (strequal(key, "Magnitude")) {
+        lua_pushnumber(L, MAGNITUDE(vector3));
+    } else if (strequal(key, "Unit") || strequal(key, "unit")) {
+        float magnitude = MAGNITUDE(vector3);
+        pushVector3(L, magnitude == 0 ? 0 : vector3->x / magnitude, magnitude == 0 ? 0 : vector3->y / magnitude, magnitude == 0 ? 0 : vector3->z / magnitude);
+    } else
+        goto INVALID;
 
     return 1;
 
     INVALID:
     luaL_error(L, "%s is not a valid member of Vector3", key);
 }
+#undef MAGNITUDE
+
 static int Vector3__newindex(lua_State* L) {
     // Vector3* vector3 = lua_checkvector3(L, 1);
     luaL_checkudata(L, 1, "Vector3");

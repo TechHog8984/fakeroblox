@@ -118,6 +118,39 @@ static int fr_gcfull(lua_State* L) {
     return 0;
 }
 
+static int fr_getnamecallmethod(lua_State* L) {
+    const char* method = L->namecall ? getstr(L->namecall) : NULL;
+    if (method)
+        lua_pushstring(L, method);
+    else
+        luaL_error(L, "not in namecall context!");
+
+    return 1;
+}
+
+static int fr_setnamecallmethod(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TSTRING);
+
+    if (!L->namecall)
+        luaL_error(L, "not in namecall context!");
+
+    L->namecall = tsvalue(luaA_toobject(L, 1));
+
+    return 0;
+}
+
+// TODO: proper get/setrawmetatable
+static int fr_getrawmetatable(lua_State* L) {
+    if (!lua_getmetatable(L, 1))
+        lua_pushnil(L);
+    return 1;
+}
+
+static int fr_setrawmetatable(lua_State* L) {
+    lua_setmetatable(L, 1);
+    return 1;
+}
+
 static int fr_rawtfreeze(lua_State* L) {
     luaL_checktype(L, 1, LUA_TTABLE);
     luaL_argcheck(L, !lua_getreadonly(L, 1), 1, "table is already frozen");
@@ -217,6 +250,12 @@ void open_fakeroblox_environment(lua_State *L) {
     env_expose(gcstep)
     env_expose(gcfull)
 
+    env_expose(getnamecallmethod)
+    env_expose(setnamecallmethod)
+
+    env_expose(getrawmetatable)
+    env_expose(setrawmetatable)
+
     env_expose(base64encode)
     env_expose(base64decode)
 
@@ -227,6 +266,11 @@ void open_fakeroblox_environment(lua_State *L) {
 
     env_expose(getgenv)
     env_expose(getrenv)
+
+    lua_getglobal(L, "os");
+    lua_rawgetfield(L, -1, "time");
+    lua_setglobal(L, "tick");
+    lua_pop(L, 1);
 
     lua_getglobal(L, "table");
     lua_pushcfunction(L, fr_rawtfreeze, "rawfreeze");

@@ -1,6 +1,7 @@
 #include "classes/vector2.hpp"
 #include "common.hpp"
 
+#include <cmath>
 #include <cstring>
 
 #include "lnumutils.h"
@@ -43,6 +44,8 @@ static int Vector2__tostring(lua_State* L) {
     return 1;
 }
 
+#define MAGNITUDE(vector2) (sqrt(vector2->x * vector2->x + vector2->y * vector2->y))
+
 static int Vector2__index(lua_State* L) {
     Vector2* vector2 = lua_checkvector2(L, 1);
     const char* key = luaL_checkstring(L, 2);
@@ -61,13 +64,21 @@ static int Vector2__index(lua_State* L) {
             default:
                 goto INVALID;
         }
-    }
+    } else if (strequal(key, "Magnitude")) {
+        lua_pushnumber(L, MAGNITUDE(vector2));
+    } else if (strequal(key, "Unit") || strequal(key, "unit")) {
+        float magnitude = MAGNITUDE(vector2);
+        pushVector2(L, magnitude == 0 ? 0 : vector2->x / magnitude, magnitude == 0 ? 0 : vector2->y / magnitude);
+    } else
+        goto INVALID;
 
     return 1;
 
     INVALID:
     luaL_error(L, "%s is not a valid member of Vector2", key);
 }
+#undef MAGNITUDE
+
 static int Vector2__newindex(lua_State* L) {
     // Vector2* vector2 = lua_checkvector2(L, 1);
     luaL_checkudata(L, 1, "Vector2");

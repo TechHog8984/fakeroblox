@@ -4,11 +4,14 @@
 #include "classes/roblox/datatypes/rbxscriptsignal.hpp"
 #include "classes/roblox/instance.hpp"
 #include "classes/roblox/serviceprovider.hpp"
+#include "classes/vector2.hpp"
 
 #include "console.hpp"
 #include "taskscheduler.hpp"
 
 #include "raylib.h"
+
+#include "lualib.h"
 
 #include <map>
 #include <queue>
@@ -247,10 +250,11 @@ void UserInputService::signalMouseMovement(std::shared_ptr<rbxInstance> instance
 
 int global_mouse_wheel = 0;
 bool UserInputService::is_window_focused = false;
+Vector2 UserInputService::mouse_position = GetMousePosition();
 
 void UserInputService::process(lua_State *L) {
     const Vector2 mouse_delta = GetMouseDelta();
-    const Vector2 mouse_position = GetMousePosition();
+    UserInputService::mouse_position = GetMousePosition();
     const Vector2 mouse_wheel_vector = GetMouseWheelMoveV();
 
     const int mouse_wheel_y = mouse_wheel_vector.y;
@@ -420,8 +424,38 @@ void UserInputService::process(lua_State *L) {
 
 #undef keyShifted
 
+namespace rbxInstance_UserInputService_methods {
+    static int getMouseLocation(lua_State* L) {
+        lua_checkinstance(L, 1, "UserInputService");
+
+        return pushVector2(L, UserInputService::mouse_position);
+    }
+    static int isMouseButtonPressed(lua_State* L) {
+        lua_checkinstance(L, 1, "UserInputService");
+
+        luaL_argcheck(L, lua_isnumber(L, 2) || lua_isuserdata(L, 2), 2, "expected number or userdata");
+
+        int mouse = -1;
+        if (lua_isnumber(L, 2))
+            mouse = luaL_checkinteger(L, 2);
+        else 
+            mouse = lua_checkenumitem(L, 2)->value;
+
+        if (mouse > 2) {
+            getTask(L)->console->warning("UserInputService.IsMouseButtonPressed - UserInputType provided is not a mouse button.");
+            lua_pushboolean(L, false);
+        } else
+            lua_pushboolean(L, IsMouseButtonPressed(mouse));
+
+        return 1;
+    }
+}; // namespace rbxInstance_UserInputService_methods
+
 void rbxInstance_UserInputService_init() {
     UserInputService::signalMouseMovement(nullptr, InputBegan);
+
+    rbxClass::class_map["UserInputService"]->methods["GetMouseLocation"].func = rbxInstance_UserInputService_methods::getMouseLocation;
+    rbxClass::class_map["UserInputService"]->methods["IsMouseButtonPressed"].func = rbxInstance_UserInputService_methods::isMouseButtonPressed;
 }
 
 }; // namespace fakeroblox

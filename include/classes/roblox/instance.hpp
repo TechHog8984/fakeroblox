@@ -109,9 +109,12 @@ typedef std::variant<
 
 class rbxValue {
 public:
+    // TODO: setscriptable applies to all instances of a class because each value's property member will point to the same single property shared ptr.
+    // We could get around this by making property an rbxProperty not a shared ptr, but this comes at the cost of memory.
+    // Alternatively, we could just give rbxValue its own tags field that initially copies its property.
     std::shared_ptr<rbxProperty> property;
 
-    // TODO: use monostate in the variant instead of is_nil
+    // TODO: use monostate in the variant instead of is_nil?
     bool is_nil;
     rbxValueVariant value;
 };
@@ -319,5 +322,7 @@ namespace rbxInstance_datatype {
     int _new(lua_State* L);
     int from_existing(lua_State* L);
 }; // namespace rbxInstance_datatype
+
+extern std::shared_ptr<rbxInstance> hiddenui;
 
 }; // namespace fakeroblox

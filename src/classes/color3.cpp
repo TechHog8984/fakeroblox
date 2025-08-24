@@ -1,6 +1,7 @@
 #include "classes/color3.hpp"
 #include "common.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 #include "lua.h"
@@ -39,9 +40,11 @@ static int Color3_fromRGB(lua_State* L) {
     return pushColor(L, r, g, b);
 }
 static int Color3_fromHSV(lua_State* L) {
-    double h = luaL_optnumberrange(L, 1, 0, 1, 0);
-    double s = luaL_optnumberrange(L, 2, 0, 1, 0);
-    double v = luaL_optnumberrange(L, 3, 0, 1, 0);
+    // FIXME: this is more similar to the behavior on Roblox; reflect in other areas (like Color3.fromRGB)
+    // it's not 100% so, tho still figure that out too
+    double h = std::max(0.0, luaL_optnumber(L, 1, 0));
+    double s = std::max(0.0, luaL_optnumber(L, 2, 0));
+    double v = std::max(0.0, luaL_optnumber(L, 3, 0));
 
     return pushColor(L, ColorFromHSV(h, s, v));
 }
