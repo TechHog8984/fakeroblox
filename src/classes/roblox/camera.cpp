@@ -19,7 +19,7 @@ void rbxInstance_Camera_updateViewport(lua_State* L) {
 }
 
 void rbxInstance_Camera_init(lua_State *L, std::shared_ptr<rbxInstance> workspace) {
-    camera = newInstance(L, "Camera");
+    camera = newInstance(L, "Camera", workspace);
     setValue(workspace, L, "CurrentCamera", camera);
 }
 

@@ -144,9 +144,6 @@ public:
     rbxInstance(std::shared_ptr<rbxClass> _class);
     ~rbxInstance();
 
-    // FIXME: getValue and setValue are inheritly flawed; the behavior should be consistent between these and __index + __newindex;
-    // the reason it isn't like that right now I believe is because I was worried about error handling; for that, we should just be able to use c++ exceptions
-
     bool isA(rbxClass* target_class);
     bool isA(const char* class_name);
     int pushEvent(lua_State* L, const char* name);
