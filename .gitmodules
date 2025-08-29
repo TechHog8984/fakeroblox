@@ -13,3 +13,6 @@
 [submodule "dependencies/simde"]
 	path = dependencies/simde
 	url = https://github.com/simd-everywhere/simde.git
+[submodule "dependencies/ImGuiFileDialog"]
+	path = dependencies/ImGuiFileDialog
+	url = https://github.com/aiekick/ImGuiFileDialog.git

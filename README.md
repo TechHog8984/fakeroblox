@@ -25,7 +25,7 @@ gcc -o mate mate.c
 ./mate
 ```
 
-that's it! to build again, simple run `./mate` just like before and it will detect any changes made and recompile only what's needed
+that's it! to build again, simply run `./mate` just like before and it will detect any changes made and recompile only what's needed
 
 # GOALS
 * Instance system
