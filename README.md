@@ -4,15 +4,24 @@ fakeroblox is an attempt to create a Luau environment that is as close to Roblox
 
 creation date: Jun 25, 2025
 
+# PROJECT STATE
+
+This project is in early development stages! This is why there is no Windows support!
+
+In addition, I am frequently making drastic changes on my local machine before pushing to GitHub (I bounce back and forth between areas) so the state of the project rarely matches what is public.
+
+Issues, however, usually closely match the project's real state.
+
 # BUILDING
-NOTE: fakeroblox has _no_ native Windows support. It is, however, likely possible to build using mingw, but that would require additional steps.
+NOTE: fakeroblox CURRENTLY does _not_ have a process for building neither for or on Windows. It is likely possible to cross compile via mingw, but that would require manual steps.
 
 fakeroblox uses [mate.h](https://github.com/TomasBorquez/mate.h/) for its core build system, along with some shell files (sorry) to build the dependencies.
 <br>
-To build dependencies, just run the two scripts inside the dependencies folder with bash:
+To build dependencies, just run each script inside the dependencies folder with bash:
 ```bash
 cd dependencies
 
+bash ./build_curl.sh
 bash ./build_luau.sh
 bash ./build_rlImGui.sh
 
@@ -25,12 +34,14 @@ gcc -o mate mate.c
 ./mate
 ```
 
-that's it! to build again, simply run `./mate` just like before and it will detect any changes made and recompile only what's needed
+That's it! To build again, simply run `./mate` just like before and it will detect any changes made and recompile only what's needed.
 
 # GOALS
 * Instance system
 * 1:1 Roblox error messages
+* input
 * 2d graphics
+* sound
 * exploit functions (most similar to Synapse)
 
 # NONGOALS
@@ -38,4 +49,4 @@ that's it! to build again, simply run `./mate` just like before and it will dete
 * networking
 * rbxl or rbxm parsing
 
-Contributions to nongoals may be welcome, but they aren't something I will be focusing on.
+Contributions to nongoals may be welcome (ONLY AFTER THE PROJECT IS AT A MORE STABLE STATE), but they aren't something I will be focusing on.
