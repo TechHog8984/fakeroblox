@@ -6,7 +6,7 @@ int main() {
 
     ExecutableOptions executable_options = {
         .output = "fakeroblox",
-        .flags = "-std=c++17 -Wall -Wno-psabi -Werror -g"
+        .flags = "-std=c++17 -Wall -Wno-psabi -Werror -g -march=native"
     };
     Executable executable = CreateExecutable(executable_options);
 

@@ -10,9 +10,9 @@
 [submodule "dependencies/curl"]
 	path = dependencies/curl
 	url = https://github.com/curl/curl
-[submodule "dependencies/simde"]
-	path = dependencies/simde
-	url = https://github.com/simd-everywhere/simde.git
 [submodule "dependencies/ImGuiFileDialog"]
 	path = dependencies/ImGuiFileDialog
 	url = https://github.com/aiekick/ImGuiFileDialog.git
+[submodule "dependencies/uuid_v4"]
+	path = dependencies/uuid_v4
+	url = https://github.com/crashoz/uuid_v4.git
