@@ -2,6 +2,7 @@
 #include "classes/roblox/datatypes/rbxscriptconnection.hpp"
 
 #include "common.hpp"
+#include "lstate.h"
 #include "taskscheduler.hpp"
 
 #include "lua.h"
@@ -45,6 +46,23 @@ void pushSignalConnectionList(lua_State* L, int narg) {
     lua_remove(L, -2);
 }
 
+static int wait_proxy(lua_State* L) {
+    const int thread_index = lua_upvalueindex(1);
+    const int connection_index = lua_upvalueindex(2);
+
+    luaL_checktype(L, thread_index, LUA_TTHREAD);
+    lua_State* thread = lua_tothread(L, thread_index);
+
+    auto connection = lua_checkrbxscriptconnection(L, connection_index);
+    connection->destroy(L);
+
+    const int arg_count = lua_gettop(L);
+    lua_xmove(L, thread, arg_count);
+
+    TaskScheduler::queueForResume(thread, arg_count);
+
+    return 0;
+}
 namespace rbxScriptSignal_methods {
     static int connect(lua_State* L) {
         lua_checkrbxscriptsignal(L, 1);
@@ -60,11 +78,29 @@ namespace rbxScriptSignal_methods {
 
         return 1;
     }
+    static int wait(lua_State* L) {
+        lua_checkrbxscriptsignal(L, 1);
+
+        pushSignalConnectionList(L, 1);
+
+        pushNewRBXScriptConnection(L, [&L]() {
+            lua_pushthread(L);
+            lua_pushvalue(L, -3); // connection
+            lua_pushcclosure(L, wait_proxy, "wait_proxy", 2);
+        });
+
+        lua_rawseti(L, -2, lua_objlen(L, -2) + 1);
+        lua_pop(L, 1);
+
+        return TaskScheduler::yieldThread(L);
+    }
 };
 lua_CFunction getrbxScriptSignalMethod(const char* key) {
     // TODO: Parallel Luau
     if (strequal(key, "Connect") || strequal(key, "connect") || strequal(key, "ConnectParallel") || strequal(key, "connectParallel"))
         return rbxScriptSignal_methods::connect;
+    else if (strequal(key, "Wait") || strequal(key, "wait"))
+        return rbxScriptSignal_methods::wait;
 
     return nullptr;
 }
@@ -197,6 +233,7 @@ void setup_rbxScriptSignal(lua_State *L) {
     // metatable
     luaL_newmetatable(L, "RBXScriptSignal");
 
+    settypemetafield(L, "RBXScriptSignal");
     setfunctionfield(L, rbxScriptSignal__tostring, "__tostring");
     setfunctionfield(L, rbxScriptSignal__index, "__index");
     setfunctionfield(L, rbxScriptSignal__newindex, "__newindex");

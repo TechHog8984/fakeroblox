@@ -1,13 +1,16 @@
 #include "classes/roblox/runservice.hpp"
+#include "classes/roblox/datatypes/rbxscriptsignal.hpp"
 #include "classes/roblox/instance.hpp"
 
 #include "common.hpp"
 #include "console.hpp"
+#include "lua.h"
 #include "lualib.h"
 
 namespace fakeroblox {
 
-#define BINDLIST "renderstepbindlist"
+std::shared_ptr<rbxInstance> RunService::instance;
+
 std::shared_mutex bind_list_mutex;
 
 static int compare(lua_State* L) {
@@ -31,7 +34,7 @@ namespace rbxInstance_RunService_methods {
         lua_rawgetfield(L, -1, "sort");
         lua_remove(L, -2);
 
-        lua_rawgetfield(L, LUA_REGISTRYINDEX, BINDLIST);
+        lua_rawgetfield(L, LUA_REGISTRYINDEX, BINDLIST_KEY);
 
         lua_createtable(L, 2, 0);
 
@@ -49,13 +52,23 @@ namespace rbxInstance_RunService_methods {
 
         return 0;
     }
+
+    static int isClient(lua_State* L) {
+        lua_pushboolean(L, true);
+        return 1;
+    }
+    static int isServer(lua_State* L) {
+        lua_pushboolean(L, false);
+        return 1;
+    }
+
     static int unbindFromRenderStep(lua_State* L) {
         std::lock_guard lock(bind_list_mutex);
 
         lua_checkinstance(L, 1, "RunService");
         const char* name = luaL_checkstring(L, 2);
 
-        lua_rawgetfield(L, LUA_REGISTRYINDEX, BINDLIST);
+        lua_rawgetfield(L, LUA_REGISTRYINDEX, BINDLIST_KEY);
         lua_rawgetfield(L, -1, name);
 
         if (lua_isnil(L, -1))
@@ -71,6 +84,14 @@ namespace rbxInstance_RunService_methods {
     }
 }; // namespace rbxInstance_RunService_methods
 
+void fireEventWithDelta(lua_State* L, const char* event, std::shared_ptr<rbxInstance>& instance, double delta) {
+    pushFunctionFromLookup(L, fireRBXScriptSignal);
+    instance->pushEvent(L, event);
+    lua_pushnumber(L, delta);
+
+    lua_call(L, 2, 0);
+}
+
 double last_clock = lua_clock();
 void RunService::process(lua_State *L) {
     std::lock_guard lock(bind_list_mutex);
@@ -79,7 +100,7 @@ void RunService::process(lua_State *L) {
     const double delta = clock - last_clock;
     last_clock = clock;
 
-    lua_rawgetfield(L, LUA_REGISTRYINDEX, BINDLIST);
+    lua_rawgetfield(L, LUA_REGISTRYINDEX, BINDLIST_KEY);
 
     lua_pushnil(L);
     while (lua_next(L, -2)) {
@@ -100,14 +121,20 @@ void RunService::process(lua_State *L) {
     }
 
     lua_pop(L, 1);
+
+    fireEventWithDelta(L, "RenderStepped", instance, delta);
+    // FIXME: instead of RunService::process, we need a RunService::preRender and RunService::postRender instead of just firing all these events (and the above bindtorenderstep stuff) here
+    fireEventWithDelta(L, "PreRender", instance, delta);
 }
 
 void rbxInstance_RunService_init(lua_State* L) {
     lua_newtable(L);
 
-    lua_rawsetfield(L, LUA_REGISTRYINDEX, BINDLIST);
+    lua_rawsetfield(L, LUA_REGISTRYINDEX, BINDLIST_KEY);
 
     rbxClass::class_map["RunService"]->methods["BindToRenderStep"].func = rbxInstance_RunService_methods::bindToRenderStep;
+    rbxClass::class_map["RunService"]->methods["IsClient"].func = rbxInstance_RunService_methods::isClient;
+    rbxClass::class_map["RunService"]->methods["IsServer"].func = rbxInstance_RunService_methods::isServer;
     rbxClass::class_map["RunService"]->methods["UnbindFromRenderStep"].func = rbxInstance_RunService_methods::unbindFromRenderStep;
 }
 

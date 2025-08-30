@@ -1,11 +1,13 @@
 #pragma once
 
-#include "lua.h"
+#include "classes/roblox/instance.hpp"
 
 namespace fakeroblox {
 
 class DataModel {
 public:
+    static std::shared_ptr<rbxInstance> instance;
+
     static bool shutdown;
 
     static void onShutdown(lua_State* L);

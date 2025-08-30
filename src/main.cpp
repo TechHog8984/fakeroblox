@@ -2,16 +2,18 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
-#include <queue>
 #include <shared_mutex>
+#include <stdexcept>
 
-#include "classes/roblox/runservice.hpp"
 #include "common.hpp"
 #include "curl/curl.h"
-#include "libraries/cachelib.hpp"
+#include "libraries/cryptlib.hpp"
+#include "libraries/drawingimmediate.hpp"
 #include "raylib.h"
 #include "rlImGui.h"
 #include "imgui.h"
+
+#include "ImGuiFileDialog.h"
 
 #include "taskscheduler.hpp"
 #include "cli.hpp"
@@ -28,8 +30,9 @@
 #include "ui/imageexplorer.hpp"
 #include "ui/tableexplorer.hpp"
 
-#include "libraries/instructionlib.hpp"
+#include "libraries/cachelib.hpp"
 #include "libraries/drawentrylib.hpp"
+#include "libraries/instructionlib.hpp"
 
 #include "classes/color3.hpp"
 #include "classes/vector2.hpp"
@@ -39,7 +42,10 @@
 #include "classes/roblox/baseplayergui.hpp"
 #include "classes/roblox/camera.hpp"
 #include "classes/roblox/datamodel.hpp"
+#include "classes/roblox/runservice.hpp"
 #include "classes/roblox/userinputservice.hpp"
+#include "classes/roblox/workspace.hpp"
+#include "classes/roblox/custom/imguiservice.hpp"
 
 #include "lua.h"
 #include "lualib.h"
@@ -64,6 +70,29 @@ int handleRecordOption(const char* option, const char*& arg, bool can_be_empty =
     return 0;
 }
 
+std::string readFileToString(const char* file_path) {
+    std::ifstream file(file_path);
+    if (!file)
+        throw std::runtime_error("failed to open file");
+
+    std::string result;
+    std::string buffer;
+    while (std::getline(file, buffer))
+        result.append(buffer) += '\n';
+    if (result.size() > 0)
+        result.erase(result.size() - 1);
+
+    file.close();
+
+    return result;
+}
+
+void writeStringToFile(const char* file_path, std::string_view contents) {
+    std::ofstream file(file_path);
+
+    file << contents;
+}
+
 size_t next_script_editor_tab_index = 0;
 struct ScriptEditorTab {
     bool exists;
@@ -73,11 +102,28 @@ struct ScriptEditorTab {
 };
 
 std::vector<ScriptEditorTab> script_editor_tab_list;
-void pushNewScriptEditorTab() {
+void pushNewScriptEditorTab(std::string contents) {
     next_script_editor_tab_index++;
     std::string name = "script";
     name.append(std::to_string(next_script_editor_tab_index));
-    script_editor_tab_list.push_back({true, true, name, "print'fakeroblox on top'"});
+    script_editor_tab_list.push_back({true, true, name, contents});
+}
+void pushNewScriptEditorTab() {
+    pushNewScriptEditorTab("print'fakeroblox on top'");
+}
+
+std::string script_editor_save_path;
+std::string script_editor_save_contents;
+std::string_view script_editor_current_contents;
+
+void tryRunCode(lua_State* L, const char* name, const char* code, size_t code_length) {
+    try {
+        TaskScheduler::startCodeOnNewThread(L, name, code, code_length, [] (std::string error) {
+            Console::ScriptConsole.error(error);
+        });
+    } catch(std::exception& e) {
+        Console::ScriptConsole.error(e.what());
+    }
 }
 
 int main(int argc, char** argv) {
@@ -99,20 +145,13 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::ifstream api_dump_file("assets/Full-API-Dump.json");
-    if (!api_dump_file) {
-        fprintf(stderr, "ERROR: failed to open Full-API-Dump.json\n");
+    std::string api_dump;
+    try {
+        api_dump.assign(readFileToString("assets/Full-API-Dump.json"));
+    } catch (std::exception& e) {
+        fprintf(stderr, "ERROR: failed to read assets/Full-API-Dump.json: %s", e.what());
         return 1;
     }
-
-    std::string api_dump;
-    std::string buffer;
-    while (std::getline(api_dump_file, buffer))
-        api_dump.append(buffer) += '\n';
-    assert(api_dump.size() > 0);
-    api_dump.erase(api_dump.size() - 1);
-
-    api_dump_file.close();
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -143,14 +182,12 @@ int main(int argc, char** argv) {
 
     rbxInstanceSetup(L, api_dump);
 
-    lua_getglobal(L, "workspace");
-    auto& workspace = lua_checkinstance(L, -1);
-    lua_pop(L, 1);
-
     // the following need to happen after rbxInstance setup
     open_instructionlib(L);
     open_cachelib(L);
-    UI_FunctionExplorer_init(L);
+    open_cryptlib(L);
+    UI_FunctionExplorer_init(L, DataModel::instance);
+    ImGuiService_init(L, DataModel::instance);
 
     SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
@@ -161,6 +198,7 @@ int main(int argc, char** argv) {
     // load fonts before opening drawentry lib and after InitWindow. This means that we have to push some lua state stuff after window creation
     FontLoader::load();
     open_drawentrylib(L);
+    open_drawingimmediate(L);
 
     lua_newtable(L);
     lua_setglobal(L, "shared");
@@ -175,6 +213,10 @@ int main(int argc, char** argv) {
     lua_pop(L, 1);
     Console::ScriptConsole.debugf("app state: %p", appL);
 
+    lua_State* userL = TaskScheduler::newThread(L, [] (std::string error) { Console::ScriptConsole.error(error); });
+    lua_pop(L, 1);
+    Console::ScriptConsole.debugf("user state: %p", userL);
+
     lua_State* testL = TaskScheduler::newThread(L, [] (std::string error) { Console::TestsConsole.error(error); });
     lua_pop(L, 1);
     Console::ScriptConsole.debugf("test state: %p", testL);
@@ -188,11 +230,16 @@ int main(int argc, char** argv) {
         char buf[100];
         snprintf(buf, 100, "App State (%p)", appL);
         getTask(appL)->identifier.assign(buf);
+        snprintf(buf, 100, "User State (%p)", userL);
+        getTask(userL)->identifier.assign(buf);
         snprintf(buf, 100, "Test State (%p)", testL);
         getTask(testL)->identifier.assign(buf);
         snprintf(buf, 100, "Font State (%p)", fontL);
         getTask(fontL)->identifier.assign(buf);
     }
+
+    static lua_State* dont_kill_thread_list[4] = { appL, userL, testL, fontL };
+    static lua_State** dont_kill_thread_list_end = dont_kill_thread_list + IM_ARRAYSIZE(dont_kill_thread_list);
 
     // window items
     bool show_fps = false;
@@ -245,6 +292,7 @@ int main(int argc, char** argv) {
 
         // lua drawings
         DrawEntry::render();
+        render_drawingimmediate(appL);
 
         // ui
         rlImGuiBegin();
@@ -257,6 +305,8 @@ int main(int argc, char** argv) {
                 ImGui::EndDisabled();
 
                 ImGui::MenuItem("print routes to stdout", nullptr, &print_stdout);
+                if (ImGui::MenuItem("enable stephook", nullptr, &enable_stephook))
+                    onEnableStephookChange(appL);
 
                 ImGui::EndMenu();
             }
@@ -288,9 +338,80 @@ int main(int argc, char** argv) {
             ImGui::EndMainMenuBar();
         }
 
-        // TODO: open_file, execute_file, save_file buttons
         if (menu_editor_open) {
             if (ImGui::Begin("Script Editor", &menu_editor_open)) {
+                if (ImGui::Button("Open File(s)")) {
+                    IGFD::FileDialogConfig config;
+                    config.countSelectionMax = 0;
+                    config.path = ".";
+                    ImGuiFileDialog::Instance()->OpenDialog("scripteditoropen", "Open File(s)", ".luau,.lua,.*", config); 
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Execute File(s)")) {
+                    IGFD::FileDialogConfig config;
+                    config.countSelectionMax = 0;
+                    config.path = ".";
+                    ImGuiFileDialog::Instance()->OpenDialog("scripteditorexecute", "Execute File(s)", ".luau,.lua,.*", config); 
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Save To File")) {
+                    IGFD::FileDialogConfig config;
+                    config.path = ".";
+                    ImGuiFileDialog::Instance()->OpenDialog("scripteditorsave", "Save File", ".*", config); 
+                }
+
+                if (ImGuiFileDialog::Instance()->Display("scripteditoropen", ImGuiWindowFlags_NoCollapse, ImVec2{0, 250})) {
+                    if (ImGuiFileDialog::Instance()->IsOk())
+                        for (auto& pair : ImGuiFileDialog::Instance()->GetSelection())
+                            pushNewScriptEditorTab(readFileToString(pair.second.c_str()));
+
+                    ImGuiFileDialog::Instance()->Close();
+                }
+                if (ImGuiFileDialog::Instance()->Display("scripteditorexecute", ImGuiWindowFlags_NoCollapse, ImVec2{0, 250})) {
+                    if (ImGuiFileDialog::Instance()->IsOk())
+                        for (auto& pair : ImGuiFileDialog::Instance()->GetSelection()) {
+                            std::string contents = readFileToString(pair.second.c_str());
+                            tryRunCode(userL, pair.first.c_str(), contents.c_str(), contents.length());
+                        }
+
+                    ImGuiFileDialog::Instance()->Close();
+                }
+                if (ImGuiFileDialog::Instance()->Display("scripteditorsave", ImGuiWindowFlags_NoCollapse, ImVec2{0, 250})) {
+                    if (ImGuiFileDialog::Instance()->IsOk()) {
+                        std::string file_path = ImGuiFileDialog::Instance()->GetFilePathName();
+
+                        if (ImGuiFileDialog::Instance()->GetSelection().empty())
+                            // TODO: error handling & feedback
+                            writeStringToFile(file_path.c_str(), script_editor_current_contents);
+                        else {
+                            script_editor_save_path = file_path;
+                            script_editor_save_contents = script_editor_current_contents;
+                        }
+
+                        Console::ScriptConsole.debugf("file path: %s", file_path.c_str());
+                    }
+
+                    ImGuiFileDialog::Instance()->Close();
+                }
+
+                if (!script_editor_save_path.empty()) {
+                    if (ImGui::Begin("Save File Confirmation")) {
+                        ImGui::Text("Are you sure you want to overwrite '%s'?", script_editor_save_path.c_str());
+                        const bool yes = ImGui::Button("YES");
+                        const bool no = ImGui::Button("NO");
+
+                        // TODO: feedback
+                        if (yes)
+                            // TODO: error handling
+                            writeStringToFile(script_editor_save_path.c_str(), script_editor_save_contents);
+
+                        if (yes || no)
+                            script_editor_save_path.clear();
+
+                        ImGui::End();
+                    }
+                }
+
                 if (ImGui::Button("+##scripteditornewtab"))
                     pushNewScriptEditorTab();
 
@@ -315,15 +436,11 @@ int main(int argc, char** argv) {
                                 imgui_inputTextCallback,
                                 (void*) &tab.code
                             );
-                            if (ImGui::Button("Execute")) {
-                                try {
-                                    TaskScheduler::startCodeOnNewThread(L, tab.name.c_str(), tab.code.c_str(), tab.code.length(), [] (std::string error) {
-                                        Console::ScriptConsole.error(error);
-                                    });
-                                } catch(std::exception& e) {
-                                    Console::ScriptConsole.error(e.what());
-                                }
-                            }
+                            script_editor_current_contents = tab.code;
+
+                            if (ImGui::Button("Execute"))
+                                tryRunCode(userL, tab.name.c_str(), tab.code.c_str(), tab.code.length());
+
                             ImGui::SameLine();
                             if (ImGui::Button("Clear"))
                                 tab.code.clear();
@@ -428,7 +545,7 @@ int main(int argc, char** argv) {
         }
         if (menu_thread_list_open) {
             if (ImGui::Begin("Thread List", &menu_thread_list_open)) {
-                std::queue<lua_State*> threads_to_kill;
+                lua_State* thread_to_kill = nullptr;
 
                 std::shared_lock lock(TaskScheduler::thread_list_mutex);
                 for (size_t i = 0; i < TaskScheduler::thread_list.size();i ++) {
@@ -442,19 +559,39 @@ int main(int argc, char** argv) {
                         std::string win_id = std::string("Thread ");
                         win_id.append(identifier);
                         if (ImGui::Begin(win_id.c_str(), &task->view.open)) {
-                            ImGui::Text("status: %s", taskStatusTostring(task->status));
+                            static const char* status_item_list[] = { "Idle", "Running", "Yielding", "Waiting", "Deferring", "Delaying" };
+                            ImGui::Combo("Status", reinterpret_cast<int*>(&task->status), status_item_list, IM_ARRAYSIZE(status_item_list));
+
+                            static const char* capability_item_list[] = {
+                                "None",
+                                "PluginSecurity",
+                                "INVALID_CAPABILITY",
+                                "LocalUserSecurity",
+                                "WritePlayerSecurity",
+                                "RobloxScriptSecurity",
+                                "RobloxSecurity",
+                                "NotAccesibleSecurity"
+                            };
+                            ImGui::Combo("Capability", reinterpret_cast<int*>(&task->capability), capability_item_list, IM_ARRAYSIZE(capability_item_list));
+
+                            const bool dont_kill = std::find(dont_kill_thread_list, dont_kill_thread_list_end, thread) != dont_kill_thread_list_end;
+                            if (dont_kill)
+                                ImGui::BeginDisabled();
                             if (ImGui::Button("Kill"))
-                                threads_to_kill.push(thread);
+                                thread_to_kill = thread;
+                            if (dont_kill) {
+                                ImGui::SetItemTooltip("protected thread");
+                                ImGui::EndDisabled();
+                            }
+
                             ImGui::End();
                         }
                     }
                 }
                 lock.unlock();
 
-                while (!threads_to_kill.empty()) {
-                    TaskScheduler::killThread(threads_to_kill.front());
-                    threads_to_kill.pop();
-                }
+                if (thread_to_kill)
+                    TaskScheduler::killThread(thread_to_kill);
             }
             ImGui::End();
         }
@@ -485,6 +622,8 @@ int main(int argc, char** argv) {
             ImGui::End();
         }
 
+        ImGuiService_render(appL);
+
         if (show_fps)
             DrawFPS(30, 30);
 
@@ -497,7 +636,7 @@ int main(int argc, char** argv) {
             startAllTests(testL);
         }
 
-        setValue<double>(workspace, appL, "DistributedGameTime", lua_clock() - initial_game_time);
+        setInstanceValue<double>(Workspace::instance, appL, "DistributedGameTime", lua_clock() - initial_game_time);
     }
     DataModel::onShutdown(appL);
 
@@ -506,10 +645,12 @@ int main(int argc, char** argv) {
 
     rlImGuiShutdown();
     FontLoader::unload();
+    UI_ImageExplorer_cleanup();
     ImageLoader::unload();
     CloseWindow();
 
     TaskScheduler::killThread(appL);
+    TaskScheduler::killThread(userL);
     TaskScheduler::killThread(testL);
     TaskScheduler::killThread(fontL);
 

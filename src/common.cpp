@@ -145,16 +145,16 @@ std::string safetostring(lua_State* L, int index) {
     return safetostringobj(L, luaA_toobject(L, index));
 }
 
-double luaL_checknumberrange(lua_State* L, int narg, double min, double max) {
+double luaL_checknumberrange(lua_State* L, int narg, double min, double max, const char* context) {
     double n = luaL_checknumber(L, narg);
-    luaL_argcheck(L, n >= min && n <= max, narg, "invalid range");
+    if (n < min || n > max)
+        luaL_error(L, "expected a value between %.f and %.f for %s; got %.f", min, max, context, n);
     return n;
 }
-double luaL_optnumberrange(lua_State* L, int narg, double min, double max, double def) {
+double luaL_optnumberrange(lua_State* L, int narg, double min, double max, const char* context, double def) {
     double n = def;
     if (lua_isnumber(L, narg)) {
-        n = lua_tonumber(L, narg);
-        luaL_argcheck(L, n >= min && n <= max, narg, "invalid range");
+        n = luaL_checknumberrange(L, narg, min, max, context);
     }
     return n;
 }
@@ -290,6 +290,12 @@ void setfunctionfield(lua_State *L, lua_CFunction func, const char *method, cons
 }
 void setfunctionfield(lua_State *L, lua_CFunction func, const char *method, bool lookup) {
     setfunctionfield(L, func, method, nullptr, lookup);
+}
+
+void settypemetafield(lua_State *L, const char *type) {
+    assert(lua_istable(L, -1));
+    lua_pushstring(L, type);
+    lua_rawsetfield(L, -2, "__type");
 }
 
 std::string sha1ToString(unsigned int *hashed) {

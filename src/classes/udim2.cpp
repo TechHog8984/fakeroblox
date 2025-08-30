@@ -135,6 +135,7 @@ void open_udim2lib(lua_State *L) {
     // metatable
     luaL_newmetatable(L, "UDim2");
 
+    settypemetafield(L, "UDim2");
     setfunctionfield(L, UDim2__tostring, "__tostring");
     setfunctionfield(L, UDim2__index, "__index");
     setfunctionfield(L, UDim2__newindex, "__newindex");

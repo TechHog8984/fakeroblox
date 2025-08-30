@@ -1,5 +1,6 @@
 #include "libraries/instructionlib.hpp"
 
+#include "Luau/BytecodeUtils.h"
 #include "classes/roblox/datatypes/rbxscriptsignal.hpp"
 #include "common.hpp"
 #include "console.hpp"
@@ -16,6 +17,8 @@
 
 namespace fakeroblox {
 
+bool enable_stephook = false;
+
 #define LUAU_SET_OP(insn, op) ((insn) = ((insn) & ~0xff) | ((op) & 0xff))
 
 #define LUAU_SET_A(insn, a) ((insn) = ((insn) & ~(0xff << 8)) | (((a) & 0xff) << 8))
@@ -27,6 +30,12 @@ namespace fakeroblox {
 #define LUAU_SET_D(insn, d) ((insn) = ((insn) & 0xffff) | (((d) & 0xffff) << 16))
 
 #define LUAU_SET_E(insn, e) ((insn) = ((insn) & 0xff) | (((e) & 0xffffff) << 8))
+
+struct InstructionWrapper {
+    Proto* proto;
+    Instruction insn;
+    Instruction* aux;
+};
 
 void stephook(lua_State* L, lua_Debug* ar);
 
@@ -66,8 +75,14 @@ int instruction__index(lua_State* L) {
             default:
                 goto INVALID;
         }
-    } else if (strequal(key, "op")) {
+    } else if (strequal(key, "op"))
         lua_pushnumber(L, LUAU_INSN_OP(insn->insn));
+    else if (strequal(key, "aux")) {
+        auto& aux = insn->aux;
+        if (aux)
+            lua_pushnumber(L, *aux);
+        else
+            lua_pushnil(L);
     } else
         goto INVALID;
 
@@ -105,8 +120,14 @@ int instruction__newindex(lua_State* L) {
             default:
                 goto INVALID;
         }
-    } else if (strequal(key, "op")) {
+    } else if (strequal(key, "op"))
         LUAU_SET_OP(insn->insn, luaL_checkunsigned(L, 3));
+    else if (strequal(key, "aux")) {
+        auto& aux = insn->aux;
+        if (!aux)
+            luaL_error(L, "instruction (op %u) doesn't have aux!", LUAU_INSN_OP(insn->insn));
+        else
+            *aux = luaL_checkunsigned(L, 3);
     } else
         goto INVALID;
 
@@ -127,12 +148,49 @@ int instruction__namecall(lua_State* L) {
     return 0;
 }
 
+static int fr_instructionlib_getimport(lua_State* L) {
+    InstructionWrapper* insn = lua_checkinstruction(L, 1);
+
+    const uint8_t op = LUAU_INSN_OP(insn->insn);
+    if (op != LOP_GETIMPORT)
+        luaL_error(L, "instruction (op %u) was not a GETIMPORT!", op);
+
+    if (!insn->aux)
+        luaL_error(L, "unexpected error - no aux!");
+
+    const uint32_t id = *insn->aux;
+
+    int count = id >> 30;
+    if (count <= 0)
+        luaL_error(L, "unexpected error - count (%d) <= 0", count);
+
+    int id0 = int(id >> 20) & 1023;
+    int id1 = int(id >> 10) & 1023;
+    int id2 = int(id) & 1023;
+
+    TValue* k = insn->proto->k;
+
+    // TODO: use a str buffer or something (whatever concat does)
+    std::string import = svalue(&k[id0]);
+
+    if (count > 1)
+        (import += '.').append(svalue(&k[id1]));
+    if (count > 2)
+        (import += '.').append(svalue(&k[id2]));
+
+    lua_pushstring(L, import.c_str());
+    return 1;
+}
+
 void open_instructionlib(lua_State *L) {
     // instruction global
     lua_newtable(L);
 
     pushNewRBXScriptSignal(L, "stephook");
     lua_setfield(L, -2, "stephook");
+
+    // TODO: make this a method of InstructionWrapper or just __index .import
+    setfunctionfield(L, fr_instructionlib_getimport, "getimport");
 
     lua_pushnumber(L, LOP_NOP);
     lua_setfield(L, -2, "LOP_NOP");
@@ -370,8 +428,7 @@ void open_instructionlib(lua_State *L) {
 
     lua_pop(L, 1);
 
-    lua_singlestep(L, true);
-    lua_callbacks(L)->debugstep = stephook;
+    onEnableStephookChange(L);
 }
 
 static int stephook_filter(lua_State* L) {
@@ -400,7 +457,12 @@ void stephook(lua_State* L, lua_Debug* ar) {
     lua_pushcclosure(L, stephook_filter, "stephook_filter", 1);
 
     InstructionWrapper* wrapper = static_cast<InstructionWrapper*>(lua_newuserdata(L, sizeof(InstructionWrapper)));
+    wrapper->proto = this_cl->l.p;
     wrapper->insn = insn;
+    if (Luau::getOpLength(static_cast<LuauOpcode>(LUAU_INSN_OP(insn))) > 1)
+        wrapper->aux = const_cast<Instruction*>(pc + 1);
+    else
+        wrapper->aux = nullptr;
 
     luaL_getmetatable(L, "InstructionWrapper");
     lua_setmetatable(L, -2);
@@ -411,6 +473,17 @@ void stephook(lua_State* L, lua_Debug* ar) {
     lua_call(L, 4, 0);
 
     *const_cast<Instruction*>(pc) = wrapper->insn;
+}
+
+void onEnableStephookChange(lua_State* L) {
+    // TODO: this should also be based on how many connections there are to the signal, if possible
+    if (enable_stephook) {
+        lua_singlestep(L, true);
+        lua_callbacks(L)->debugstep = stephook;
+    } else {
+        lua_singlestep(L, false);
+        lua_callbacks(L)->debugstep = nullptr;
+    }
 }
 
 }; // namespace fakeroblox

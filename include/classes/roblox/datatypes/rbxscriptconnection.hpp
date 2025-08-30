@@ -3,6 +3,7 @@
 #include "lua.h"
 
 #include <cstdio>
+#include <functional>
 
 namespace fakeroblox {
 
@@ -16,6 +17,7 @@ public:
     void destroy(lua_State* L);
 };
 
+int pushNewRBXScriptConnection(lua_State* L, std::function<void()> pushValue);
 int pushNewRBXScriptConnection(lua_State* L, int func_index);
 rbxScriptConnection* lua_checkrbxscriptconnection(lua_State* L, int narg);
 

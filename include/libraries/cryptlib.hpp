@@ -4,7 +4,6 @@
 
 namespace fakeroblox {
 
-void UI_ImageExplorer_render(lua_State* L);
-void UI_ImageExplorer_cleanup();
+void open_cryptlib(lua_State* L);
 
 }; // namespace fakeroblox

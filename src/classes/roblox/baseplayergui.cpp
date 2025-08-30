@@ -1,6 +1,7 @@
 #include "classes/roblox/baseplayergui.hpp"
 #include "classes/roblox/camera.hpp"
 #include "classes/roblox/datatypes/rbxscriptsignal.hpp"
+#include "classes/roblox/guibutton.hpp"
 #include "classes/roblox/instance.hpp"
 #include "classes/roblox/userinputservice.hpp"
 #include "classes/udim2.hpp"
@@ -95,7 +96,7 @@ std::map<rbxInstance*, bool> mouse_over_map;
 
 // NOTE: expects Parent
 static bool isStorageChild(std::shared_ptr<rbxInstance> instance) {
-    auto parent = getValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
+    auto parent = getInstanceValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
     assert(parent);
 
     return std::find(gui_storage_list.begin(), gui_storage_list.end(), parent) != gui_storage_list.end();
@@ -103,18 +104,18 @@ static bool isStorageChild(std::shared_ptr<rbxInstance> instance) {
 Vector2 Vector2Zero{0, 0};
 
 void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> instance, Vector2 mouse) {
-    auto parent = getValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
+    auto parent = getInstanceValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
     const bool is_storage_child = isStorageChild(parent);
 
     // TODO: separate function for pos&size calculations that only get called on parent changed?
     // above will be nice so a newly-created guiobject's Absolute* values aren't all zero until render
-    auto parent_absolute_position = is_storage_child ? Vector2Zero : getValue<Vector2>(parent, "AbsolutePosition");
-    auto parent_absolute_size = is_storage_child ? rbxCamera::screen_size : getValue<Vector2>(parent, "AbsoluteSize");
-    auto parent_absolute_rotation = is_storage_child ? 0.0f : getValue<float>(parent, "AbsoluteRotation");
+    auto parent_absolute_position = is_storage_child ? Vector2Zero : getInstanceValue<Vector2>(parent, "AbsolutePosition");
+    auto parent_absolute_size = is_storage_child ? rbxCamera::screen_size : getInstanceValue<Vector2>(parent, "AbsoluteSize");
+    auto parent_absolute_rotation = is_storage_child ? 0.0f : getInstanceValue<float>(parent, "AbsoluteRotation");
 
-    auto& position = getValue<UDim2>(instance, "Position");
-    auto& size = getValue<UDim2>(instance, "Size");
-    auto rotation = getValue<float>(instance, "Rotation");
+    auto& position = getInstanceValue<UDim2>(instance, "Position");
+    auto& size = getInstanceValue<UDim2>(instance, "Size");
+    auto rotation = getInstanceValue<float>(instance, "Rotation");
 
     auto position_x_scale = position.x.scale;
     auto position_y_scale = position.y.scale;
@@ -130,15 +131,24 @@ void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> instance, Vector
 
     float absolute_rotation = parent_absolute_rotation + rotation;
 
-    setValue<Vector2>(instance, L, "AbsolutePosition", absolute_position);
-    setValue<Vector2>(instance, L, "AbsoluteSize", absolute_size);
-    setValue<float>(instance, L, "AbsoluteRotation", absolute_rotation);
+    setInstanceValue<Vector2>(instance, L, "AbsolutePosition", absolute_position);
+    setInstanceValue<Vector2>(instance, L, "AbsoluteSize", absolute_size);
+    setInstanceValue<float>(instance, L, "AbsoluteRotation", absolute_rotation);
 
-    if (!getValue<bool>(instance, "Visible"))
+    if (!getInstanceValue<bool>(instance, "Visible"))
         return;
 
-    auto background_color = getValue<Color>(instance, "BackgroundColor3");
-    background_color.a = (1 - getValue<float>(instance, "BackgroundTransparency")) * 255;
+    auto background_color = getInstanceValue<Color>(instance, "BackgroundColor3");
+    {
+        auto position = auto_button_color_map.find(instance.get());
+        if (position != auto_button_color_map.end() && position->second) {
+            // TODO: hopefully optimize this
+            const auto& hsv = ColorToHSV(background_color);
+            background_color = ColorFromHSV(hsv.x, hsv.y, hsv.z / AUTO_BUTTON_COLOR_V);
+        }
+    }
+
+    background_color.a = (1 - getInstanceValue<float>(instance, "BackgroundTransparency")) * 255;
 
     Rectangle shape_rect{
         .x = absolute_position.x + absolute_size.x / 2.f,
@@ -149,9 +159,9 @@ void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> instance, Vector
     Vector2 shape_origin{absolute_size.x / 2.f, absolute_size.y / 2.f};
     DrawRectanglePro(shape_rect, shape_origin, absolute_rotation, background_color);
 
-    auto border_size = getValue<int>(instance, "BorderSizePixel");
+    auto border_size = getInstanceValue<int>(instance, "BorderSizePixel");
     if (border_size) {
-        auto border_color = getValue<Color>(instance, "BorderColor3");
+        auto border_color = getInstanceValue<Color>(instance, "BorderColor3");
         border_color.a = background_color.a;
 
         DrawRotatedRectangleLines(absolute_position, absolute_size, rotation, border_size, border_color);
@@ -178,7 +188,7 @@ std::vector<std::shared_ptr<rbxInstance>> render_list;
 void contributeToRenderList(std::shared_ptr<rbxInstance> instance, bool is_storage = false) {
     if (!is_storage) {
         if (instance->isA("LayerCollector")) {
-            if (!getValue<bool>(instance, "Enabled"))
+            if (!getInstanceValue<bool>(instance, "Enabled"))
                 return;
             goto ADD_CHILDREN;
         }
@@ -219,8 +229,9 @@ void rbxInstance_BasePlayerGui_process(lua_State *L) {
     for (size_t i = 0; i < gui_storage_list.size(); i++)
         contributeToRenderList(gui_storage_list[i], true);
 
-    std::sort(render_list.begin(), render_list.end(), [] (std::shared_ptr<rbxInstance> a, std::shared_ptr<rbxInstance> b) {
-        return getValue<int>(a, "ZIndex") < getValue<int>(b, "ZIndex");
+    // TODO: use a std::set if stable sort is still possible (see drawingimmediate)
+    std::stable_sort(render_list.begin(), render_list.end(), [] (std::shared_ptr<rbxInstance> a, std::shared_ptr<rbxInstance> b) {
+        return getInstanceValue<int>(a, "ZIndex") < getInstanceValue<int>(b, "ZIndex");
     });
 
     auto mouse = GetMousePosition();
@@ -238,12 +249,14 @@ void rbxInstance_BasePlayerGui_process(lua_State *L) {
         auto& instance = mouse_enter_list[i];
         fireMouseMovementSignal(L, mouse, instance, "MouseEnter");
         UserInputService::signalMouseMovement(instance, InputBegan);
+        handleGuiButtonMouseEnter(instance);
     }
 
     for (size_t i = 0; i < mouse_leave_list.size(); i++) {
         auto& instance = mouse_leave_list[i];
         fireMouseMovementSignal(L, mouse, instance, "MouseLeave");
         UserInputService::signalMouseMovement(instance, InputEnded);
+        handleGuiButtonMouseLeave(instance);
     }
 }
 

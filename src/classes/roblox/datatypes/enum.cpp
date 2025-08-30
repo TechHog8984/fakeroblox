@@ -150,6 +150,7 @@ void setup_enums(lua_State* L) {
     // Enums metatable
     luaL_newmetatable(L, "Enums");
 
+    settypemetafield(L, "Enums");
     setfunctionfield(L, Enums__tostring, "__tostring", nullptr);
     setfunctionfield(L, Enums__index, "__index", nullptr);
     // TODO: Enums methods
@@ -162,6 +163,7 @@ void setup_enums(lua_State* L) {
     // Enum metatable
     luaL_newmetatable(L, "Enum");
 
+    settypemetafield(L, "Enum");
     setfunctionfield(L, Enum__tostring, "__tostring", nullptr);
     setfunctionfield(L, Enum__index, "__index", nullptr);
     // TODO: Enum methods
@@ -172,6 +174,7 @@ void setup_enums(lua_State* L) {
     // EnumItem metatable
     luaL_newmetatable(L, "EnumItem");
 
+    settypemetafield(L, "EnumItem");
     setfunctionfield(L, EnumItem__tostring, "__tostring", nullptr);
     setfunctionfield(L, EnumItem__index, "__index", nullptr);
     setfunctionfield(L, EnumItem__eq, "__eq", nullptr);

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "console.hpp"
 #include "lua.h"
 #include "lualib.h"
 
@@ -26,25 +27,26 @@ int pushColor(lua_State* L, Color color) {
 }
 
 static int Color3_new(lua_State* L) {
-    double r = luaL_optnumberrange(L, 1, 0, 1, 0);
-    double g = luaL_optnumberrange(L, 2, 0, 1, 0);
-    double b = luaL_optnumberrange(L, 3, 0, 1, 0);
+    float r = luaL_optnumberrange(L, 1, 0, 1, "r");
+    float g = luaL_optnumberrange(L, 2, 0, 1, "g");
+    float b = luaL_optnumberrange(L, 3, 0, 1, "b");
 
-    return pushColor(L, r * 255, g * 255, b * 255);
+    return pushColor(L, r * 255.f, g * 255.f, b * 255.f);
 }
 static int Color3_fromRGB(lua_State* L) {
-    double r = luaL_optnumberrange(L, 1, 0, 255, 0);
-    double g = luaL_optnumberrange(L, 2, 0, 255, 0);
-    double b = luaL_optnumberrange(L, 3, 0, 255, 0);
+    float r = luaL_optnumberrange(L, 1, 0, 255, "r");
+    float g = luaL_optnumberrange(L, 2, 0, 255, "g");
+    float b = luaL_optnumberrange(L, 3, 0, 255, "b");
 
     return pushColor(L, r, g, b);
 }
 static int Color3_fromHSV(lua_State* L) {
-    // FIXME: this is more similar to the behavior on Roblox; reflect in other areas (like Color3.fromRGB)
-    // it's not 100% so, tho still figure that out too
-    double h = std::max(0.0, luaL_optnumber(L, 1, 0));
-    double s = std::max(0.0, luaL_optnumber(L, 2, 0));
-    double v = std::max(0.0, luaL_optnumber(L, 3, 0));
+    // FIXME: this is more similar to the behavior on Roblox (in terms of erroring)
+    // reflect in other areas (like Color3.fromRGB)
+    // it's not 100% tho, so still figure that out too
+    float h = std::max(0.0, luaL_optnumber(L, 1, 0));
+    float s = std::max(0.0, luaL_optnumber(L, 2, 0));
+    float v = std::max(0.0, luaL_optnumber(L, 3, 0));
 
     return pushColor(L, ColorFromHSV(h, s, v));
 }
@@ -57,7 +59,11 @@ static int Color3_fromHex(lua_State* L) {
         luaL_error(L, "Unable to convert characters to hex value");
     }
 
-    return pushColor(L, GetColor(number));
+    unsigned char r = (number >> 16) & 0xFF;
+    unsigned char g = (number >> 8) & 0xFF;
+    unsigned char b = number & 0xFF;
+
+    return pushColor(L, Color{ r, g, b, 255 });
 }
 
 Color* lua_checkcolor(lua_State* L, int narg) {
@@ -72,12 +78,19 @@ static int Color3__tostring(lua_State* L) {
     lua_pushfstringL(L, "%i, %i, %i", color->r, color->g, color->b);
     return 1;
 }
+static int Color3__eq(lua_State* L) {
+    Color* a = static_cast<Color*>(luaL_checkudata(L, 1, "Color3"));
+    Color* b = static_cast<Color*>(luaL_checkudata(L, 2, "Color3"));
+
+    lua_pushboolean(L, b->r == a->r && b->g == a->g && b->b == a->b);
+    return 1;
+}
 
 namespace Color3_methods {
     static int lerp(lua_State* L) {
         Color* a = lua_checkcolor(L, 1);
         Color* b = lua_checkcolor(L, 2);
-        double alpha = luaL_checknumberrange(L, 3, 0, 1);
+        double alpha = luaL_checknumberrange(L, 3, 0, 1, "alpha");
 
         return pushColor(L, ColorLerp(*a, *b, alpha));
     }
@@ -95,7 +108,8 @@ namespace Color3_methods {
     static int toHex(lua_State* L) {
         Color* color = lua_checkcolor(L, 1);
 
-        auto hex = ColorToInt(*color);
+        // auto hex = ColorToInt(*color);
+        unsigned int hex = (color->r << 16) | (color->g << 8) | color->b;
 
         lua_pushfstring(L, "%x", hex);
 
@@ -199,10 +213,12 @@ void open_color3lib(lua_State *L) {
     // metatable
     luaL_newmetatable(L, "Color3");
 
+    settypemetafield(L, "Color3");
     setfunctionfield(L, Color3__tostring, "__tostring");
     setfunctionfield(L, Color3__index, "__index");
     setfunctionfield(L, Color3__newindex, "__newindex");
     setfunctionfield(L, Color3__namecall, "__namecall");
+    setfunctionfield(L, Color3__eq, "__eq");
 
     lua_pop(L, 1);
 }

@@ -176,6 +176,7 @@ void open_vector2lib(lua_State *L) {
     // metatable
     luaL_newmetatable(L, "Vector2");
 
+    settypemetafield(L, "Vector2");
     setfunctionfield(L, Vector2__tostring, "__tostring");
     setfunctionfield(L, Vector2__index, "__index");
     setfunctionfield(L, Vector2__newindex, "__newindex");

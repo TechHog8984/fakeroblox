@@ -168,13 +168,13 @@ void setInstanceParent(lua_State* L, std::shared_ptr<rbxInstance> instance, std:
 bool isDescendantOf(std::shared_ptr<rbxInstance> other);
 
 template<typename T>
-T& getValue(std::shared_ptr<rbxInstance> instance, std::string name) {
+T& getInstanceValue(std::shared_ptr<rbxInstance> instance, std::string name) {
     std::lock_guard lock(instance->values_mutex);
     return std::get<T>(instance->values.at(name).value);
 }
 
 template<typename T>
-void setValue(std::shared_ptr<rbxInstance> instance, lua_State* L, std::string name, T value, bool dont_report_changed = false) {
+void setInstanceValue(std::shared_ptr<rbxInstance> instance, lua_State* L, std::string name, T value, bool dont_report_changed = false) {
     std::unique_lock lock(instance->values_mutex);
 
     auto& variant = instance->values.at(name).value;

@@ -1,6 +1,8 @@
 #include "classes/roblox/datamodel.hpp"
+#include "classes/roblox/datatypes/rbxscriptsignal.hpp"
 #include "classes/roblox/instance.hpp"
 
+#include "common.hpp"
 #include "taskscheduler.hpp"
 #include "http.hpp"
 
@@ -9,17 +11,17 @@
 
 namespace fakeroblox {
 
+std::shared_ptr<rbxInstance> DataModel::instance;
 bool DataModel::shutdown = false;
 
 #define TOCLOSEBINDS_KEY "datamodeltoclosebinds"
 
 void DataModel::onShutdown(lua_State* L) {
+    assert(instance);
+
     pushFunctionFromLookup(L, fr_task_spawn, "spawn");
 
-    lua_getglobal(L, "game");
-    std::shared_ptr<rbxInstance> game = lua_checkinstance(L, -1, "DataModel");
-    auto& on_close = getValue<rbxCallback>(game, "OnClose");
-    lua_pop(L, 1);
+    auto& on_close = getInstanceValue<rbxCallback>(instance, "OnClose");
 
     if (on_close.index != -1) {
         lua_pushvalue(L, -1);
@@ -40,6 +42,11 @@ void DataModel::onShutdown(lua_State* L) {
 
         lua_pop(L, 1);
     }
+
+    pushFunctionFromLookup(L, fireRBXScriptSignal);
+    instance->pushEvent(L, "Close");
+
+    lua_call(L, 1, 0);
 }
 
 namespace rbxInstance_DataModel_methods {

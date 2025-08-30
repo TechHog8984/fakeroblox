@@ -1,4 +1,5 @@
 #include "classes/roblox/guiobject.hpp"
+#include "classes/roblox/guibutton.hpp"
 #include "classes/roblox/instance.hpp"
 
 namespace fakeroblox {
@@ -10,6 +11,8 @@ void rbxInstance_GuiObject_init() {
         std::get<int>(instance->values["BorderSizePixel"].value) = 1;
         std::get<bool>(instance->values["Visible"].value) = true;
     };
+
+    rbxInstance_GuiButton_init();
 }
 
-};
+}; // namespace fakeroblox

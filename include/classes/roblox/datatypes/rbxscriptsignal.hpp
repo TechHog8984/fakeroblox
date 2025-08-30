@@ -19,9 +19,9 @@ void pushSignalConnectionList(lua_State* L, int narg);
 int pushNewRBXScriptSignal(lua_State* L, std::string name);
 rbxScriptSignal* lua_checkrbxscriptsignal(lua_State* L, int narg);
 
-// push signal, then args, just like a function
+// push signal, then args, just like a function (NOT REALLY; THIS FUNCTION USES POSITIVE INDEXES AND EXPECTS FUNCTION TO BE AT R1)
 int fireRBXScriptSignal(lua_State* L);
-// push signal, then args, just like a function
+// push signal, then args, just like a function (NOT REALLY; THIS FUNCTION USES POSITIVE INDEXES AND EXPECTS FUNCTION TO BE AT R1)
 int fireRBXScriptSignalWithFilter(lua_State* L);
 // push signal
 int disconnectAllRBXScriptSignal(lua_State* L);

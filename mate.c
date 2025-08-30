@@ -10,11 +10,12 @@ int main() {
     };
     Executable executable = CreateExecutable(executable_options);
 
-    AddIncludePaths(executable, "./include", "./dependencies/json/include", "./dependencies/curl/include", "./dependencies/simde", "./dependencies/uuid_v4");
+    AddIncludePaths(executable, "./include", "./dependencies/json/include", "./dependencies/curl/include", "./dependencies/simde", "./dependencies/uuid_v4", "./dependencies/ImGuiFileDialog");
 
     AddFile(executable, "./src/*.cpp");
     AddFile(executable, "./src/classes/*.cpp");
     AddFile(executable, "./src/classes/roblox/*.cpp");
+    AddFile(executable, "./src/classes/roblox/custom/*.cpp");
     AddFile(executable, "./src/classes/roblox/datatypes/*.cpp");
     AddFile(executable, "./src/libraries/*.cpp");
     AddFile(executable, "./src/ui/*.cpp");
@@ -40,6 +41,9 @@ int main() {
 
     AddLibraryPaths(executable, "./dependencies/curl/cmake/lib");
     LinkSystemLibraries(executable, "curl");
+
+    AddLibraryPaths(executable, "./dependencies/ImGuiFileDialog/cmake");
+    LinkSystemLibraries(executable, "ImGuiFileDialog");
 
     InstallExecutable(executable);
 

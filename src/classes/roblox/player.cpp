@@ -17,10 +17,9 @@ void rbxInstance_Player_init(lua_State *L, std::shared_ptr<rbxInstance> players_
     rbxClass::class_map["Player"]->methods["GetMouse"].func = rbxInstance_Player_methods::getMouse;
 
     rbxPlayer::localplayer = newInstance(L, "Player", players_service);
-    rbxPlayer::localmouse = newInstance(L, "Mouse", rbxPlayer::localplayer);
+    rbxPlayer::localmouse = newInstance(L, "Mouse");
 
     rbxPlayer::localplayer->values[PROP_INSTANCE_NAME].value = "LocalPlayer";
-    rbxPlayer::localplayer->values["Mouse"].value = rbxPlayer::localmouse;
 
     players_service->values["LocalPlayer"].value = rbxPlayer::localplayer;
 }

@@ -1,11 +1,17 @@
 #include "environment.hpp"
-#include "base64.hpp"
+#include "classes/roblox/datatypes/rbxscriptsignal.hpp"
+#include "classes/roblox/runservice.hpp"
+#include "common.hpp"
+#include "libraries/drawentrylib.hpp"
+#include "ltable.h"
 #include "taskscheduler.hpp"
 
 #include "classes/roblox/userinputservice.hpp"
 
 #include <string>
 
+#include "Luau/Common.h"
+#include "Luau/Compiler.h"
 #include "lua.h"
 #include "lualib.h"
 #include "lgc.h"
@@ -13,10 +19,16 @@
 #include "lmem.h"
 #include "lobject.h"
 #include "lstate.h"
-#include "Luau/Common.h"
-#include "Luau/Compiler.h"
 
 namespace fakeroblox {
+
+static int fr_identifyexecutor(lua_State* L) {
+    lua_pushstring(L, "fakeroblox");
+    // TODO: actual version?
+    lua_pushstring(L, "v1");
+
+    return 2;
+}
 
 static int fr_getreg(lua_State* L) {
     lua_pushvalue(L, LUA_REGISTRYINDEX);
@@ -84,6 +96,42 @@ static int fr_getgc(lua_State* L) {
     return 1;
 }
 
+static int fr_getallthreads(lua_State* L) {
+    std::shared_lock lock(TaskScheduler::thread_list_mutex);
+
+    lua_createtable(L, TaskScheduler::thread_list.size(), 0);
+    for (size_t i = 0; i < TaskScheduler::thread_list.size();i ++) {
+        lua_State* thread = TaskScheduler::thread_list[i];
+        // hack because I don't want to bring over api_incr_top
+        lua_pushboolean(L, false);
+        setthvalue(L, L->top - 1, thread);
+        lua_rawseti(L, -2, i + 1);
+    }
+
+    return 1;
+}
+
+static int fr_getrendersteppedlist(lua_State* L) {
+    lua_rawgetfield(L, LUA_REGISTRYINDEX, BINDLIST_KEY);
+    luaL_checktype(L, 1, LUA_TTABLE);
+
+    LuaTable* table = hvalue(luaA_toobject(L, 1));
+    const int item_count = luaH_getn(table);
+
+    lua_createtable(L, item_count, 0);
+
+    int i = 0;
+    lua_pushnil(L);
+    while (lua_next(L, 1)) {
+        lua_rawgeti(L, -1, 2);
+        lua_rawseti(L, 2, ++i);
+
+        lua_pop(L, 1);
+    }
+
+    return 1;
+}
+
 static int fr_safetostring(lua_State* L) {
     luaL_checkany(L, 1);
     std::string str = safetostring(L, 1);
@@ -139,16 +187,37 @@ static int fr_setnamecallmethod(lua_State* L) {
     return 0;
 }
 
-// TODO: proper get/setrawmetatable
+static int fr_islclosure(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TFUNCTION);
+    Closure* cl = clvalue(luaA_toobject(L, 1));
+
+    lua_pushboolean(L, !cl->isC);
+    return 1;
+}
+static int fr_iscclosure(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TFUNCTION);
+    Closure* cl = clvalue(luaA_toobject(L, 1));
+
+    lua_pushboolean(L, cl->isC);
+    return 1;
+}
+
 static int fr_getrawmetatable(lua_State* L) {
+    luaL_checkany(L, 1);
+
     if (!lua_getmetatable(L, 1))
         lua_pushnil(L);
     return 1;
 }
 
 static int fr_setrawmetatable(lua_State* L) {
+    luaL_checkany(L, 1);
+    luaL_argexpected(L, lua_isnil(L, 2) || lua_istable(L, 2), 2, "nil or table");
+    if (lua_gettop(L) > 2)
+        luaL_error(L, "too many arguments to fr_setrawmetatable! expected 2");
+
     lua_setmetatable(L, 1);
-    return 1;
+    return 0;
 }
 
 static int fr_rawtfreeze(lua_State* L) {
@@ -179,37 +248,25 @@ static int fr_tsetfrozen(lua_State* L) {
     return 1;
 }
 
-static int fr_base64encode(lua_State* L) {
-    size_t input_size;
-    const char* input = const_cast<char*>(luaL_checklstring(L, 1, &input_size));
-
-    std::string output = b64_encode(reinterpret_cast<const unsigned char*>(input), input_size);
-
-    lua_pushlstring(L, output.c_str(), output.size());
-    return 1;
-}
-static int fr_base64decode(lua_State* L) {
-    size_t input_size;
-    const char* input = const_cast<char*>(luaL_checklstring(L, 1, &input_size));
-
-    std::string output = b64_decode(reinterpret_cast<const unsigned char*>(input), input_size);
-
-    lua_pushlstring(L, output.c_str(), output.size());
-    return 1;
-}
-
 static int fr_iswindowactive(lua_State* L) {
     lua_pushboolean(L, UserInputService::is_window_focused);
     return 1;
 }
 
 static int fr_setfpscap(lua_State* L) {
-    TaskScheduler::setTargetFps(luaL_checknumberrange(L, 1, 0, static_cast<unsigned>(-1)));
+    TaskScheduler::setTargetFps(luaL_checknumberrange(L, 1, 0, static_cast<unsigned>(-1), "target fps"));
+
     return 0;
 }
 static int fr_getfpscap(lua_State* L) {
     lua_pushinteger(L, TaskScheduler::target_fps);
     return 1;
+}
+
+static int fr_setwindowtitle(lua_State* L) {
+    SetWindowTitle(luaL_checkstring(L, 1));
+
+    return 0;
 }
 
 static int fr_getgenv(lua_State* L) {
@@ -226,6 +283,37 @@ static int fr_getrenv(lua_State* L) {
     return 1;
 }
 
+static int fr_printidentity(lua_State* L) {
+    Task* task = getTask(L);
+    assert(task);
+
+    pushFunctionFromLookup(L, fr_print);
+    lua_pushfstring(L, "Current identity is %d", task->capability);
+
+    lua_call(L, 1, 0);
+
+    return 0;
+}
+static int fr_getthreadidentity(lua_State* L) {
+    Task* task = getTask(L);
+    assert(task);
+
+    lua_pushnumber(L, task->capability);
+    return 1;
+}
+static int fr_setthreadidentity(lua_State* L) {
+    Task* task = getTask(L);
+    assert(task);
+
+    const int new_identity = luaL_checknumberrange(L, 1, LOWEST_CAPABILITY, HIGHEST_CAPABILTY, "identity");
+    if (new_identity == INVALID_CAPABILITY)
+        luaL_error(L, "%d is not a valid identity", INVALID_CAPABILITY);
+
+    task->capability = static_cast<ThreadCapability>(new_identity);
+
+    return 0;
+}
+
 void open_fakeroblox_environment(lua_State *L) {
     // methodlookup
     lua_newtable(L);
@@ -240,8 +328,12 @@ void open_fakeroblox_environment(lua_State *L) {
     lua_pushcfunction(L, fr_warn, "warn");
     lua_setglobal(L, "warn");
 
+    env_expose(identifyexecutor)
+
     env_expose(getreg)
     env_expose(getgc)
+    env_expose(getallthreads)
+    env_expose(getrendersteppedlist)
 
     env_expose(safetostring)
 
@@ -253,19 +345,36 @@ void open_fakeroblox_environment(lua_State *L) {
     env_expose(getnamecallmethod)
     env_expose(setnamecallmethod)
 
+    env_expose(islclosure)
+    env_expose(iscclosure)
+
     env_expose(getrawmetatable)
     env_expose(setrawmetatable)
-
-    env_expose(base64encode)
-    env_expose(base64decode)
 
     env_expose(iswindowactive)
 
     env_expose(setfpscap)
     env_expose(getfpscap)
 
+    env_expose(setwindowtitle)
+
+    {
+    lua_pushvalue(L, LUA_GLOBALSINDEX);
+
+    setfunctionfield(L, DrawEntry__index, "getrenderproperty");
+    setfunctionfield(L, DrawEntry__newindex, "setrenderproperty");
+
+    setfunctionfield(L, fireRBXScriptSignal, "firesignal");
+
+    lua_pop(L, 1);
+    }
+
     env_expose(getgenv)
     env_expose(getrenv)
+
+    env_expose(printidentity)
+    env_expose(getthreadidentity)
+    env_expose(setthreadidentity)
 
     lua_getglobal(L, "os");
     lua_rawgetfield(L, -1, "time");

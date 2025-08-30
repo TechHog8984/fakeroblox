@@ -29,7 +29,7 @@ void UI_DrawEntryList_render(lua_State *L) {
             DrawEntry::clear(L);
     }
 
-    ImGui::BeginChild("DrawEntry List##chooser", ImVec2{ImGui::GetContentRegionAvail().x * 0.25f, ImGui::GetContentRegionAvail().y}, ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
+    ImGui::BeginChild("DrawEntry List##chooser", ImVec2{ImGui::GetContentRegionAvail().x * 0.3f, ImGui::GetContentRegionAvail().y}, ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
     bool chosen_still_exists = false;
 
     DrawEntry* entry_to_clone = nullptr;
@@ -42,8 +42,22 @@ void UI_DrawEntryList_render(lua_State *L) {
 
         ImGui::PushID(entry);
 
-        char buf[20];
-        snprintf(buf, 20, "entry: %s", entry->class_name);
+        #define NAME_BUF_SIZE 40
+
+        char buf[NAME_BUF_SIZE];
+        if (entry->type == DrawEntry::DrawTypeText) {
+            std::string& text = static_cast<DrawEntryText*>(entry)->text;
+            if (text.size() > NAME_BUF_SIZE - 20)
+                snprintf(buf, NAME_BUF_SIZE, "entry: %s (\"%.*s\"...)", entry->class_name, NAME_BUF_SIZE - 23, text.c_str());
+            else
+                snprintf(buf, NAME_BUF_SIZE, "entry: %s (\"%s\")", entry->class_name, text.c_str());
+
+            #undef STR_BUF_SIZE
+        } else
+            snprintf(buf, NAME_BUF_SIZE, "entry: %s", entry->class_name);
+
+        #undef NAME_BUF_SIZE
+
         if (ImGui::Selectable(buf, is_selected, ImGuiSelectableFlags_None)) {
             chosen_still_exists = true;
             drawentry_list_chosen = entry;

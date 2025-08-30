@@ -347,8 +347,8 @@ void UserInputService::process(lua_State *L) {
             input_object = newInstance(L, "InputObject");
             input_object_array[array_index] = input_object;
 
-            auto& key_code = getValue<EnumItemWrapper>(input_object, "KeyCode");
-            auto& user_input_type = getValue<EnumItemWrapper>(input_object, "UserInputType");
+            auto& key_code = getInstanceValue<EnumItemWrapper>(input_object, "KeyCode");
+            auto& user_input_type = getInstanceValue<EnumItemWrapper>(input_object, "UserInputType");
 
             switch (event.type) {
                 case InputEvent::MouseClick:
@@ -385,9 +385,9 @@ void UserInputService::process(lua_State *L) {
             0
         };
 
-        getValue<EnumItemWrapper>(input_object, "UserInputState").name.assign(input_state);
-        setValue(input_object, L, "Position", position);
-        setValue(input_object, L, "Delta", delta);
+        getInstanceValue<EnumItemWrapper>(input_object, "UserInputState").name.assign(input_state);
+        setInstanceValue(input_object, L, "Position", position);
+        setInstanceValue(input_object, L, "Delta", delta);
 
         // TODO: gameProcessedEvent
         const static bool game_processed = false;
@@ -400,14 +400,17 @@ void UserInputService::process(lua_State *L) {
 
         genericFireInputObject(L, event_instance, input_signal, input_object, game_processed);
 
-        auto clickable = getClickableGuiObject().lock();
         auto hovered_gui_objects = getGuiObjectsHovered();
 
         if (event.type != InputEvent::MouseMovement)
-            for (size_t i = 0; i < hovered_gui_objects.size(); i++)
-                if (auto instance = hovered_gui_objects[i].lock())
-                    genericFireInputObject(L, instance, input_signal, input_object, game_processed);
+            for (size_t i = 0; i < hovered_gui_objects.size(); i++) {
+                auto instance = hovered_gui_objects[i].lock();
+                if (!instance)
+                    continue;
+                genericFireInputObject(L, instance, input_signal, input_object, game_processed);
+            }
 
+        auto clickable = getClickableGuiObject().lock();
         if (clickable) {
             if (event.type == InputEvent::MouseClick) {
                 // TODO: MouseButton*Click & Activated signals

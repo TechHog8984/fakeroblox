@@ -1,8 +1,7 @@
 #include "ui/functionexplorer.hpp"
-
-#include "classes/roblox/instance.hpp"
-#include "classes/roblox/serviceprovider.hpp"
 #include "ui/ui.hpp"
+
+#include "classes/roblox/serviceprovider.hpp"
 
 #include "taskscheduler.hpp"
 
@@ -46,7 +45,7 @@ namespace UI_FunctionExplorer_methods {
     }
 }
 
-void UI_FunctionExplorer_init(lua_State* L) {
+void UI_FunctionExplorer_init(lua_State* L, std::shared_ptr<rbxInstance> datamodel) {
     auto FunctionExplorer = std::make_shared<rbxClass>();
     FunctionExplorer->name.assign("FunctionExplorer");
     FunctionExplorer->tags |= rbxClass::NotCreatable;
@@ -60,11 +59,7 @@ void UI_FunctionExplorer_init(lua_State* L) {
     rbxClass::class_map["FunctionExplorer"] = FunctionExplorer;
     ServiceProvider::registerService("FunctionExplorer");
 
-    lua_getglobal(L, "game");
-    std::shared_ptr<rbxInstance> game = lua_checkinstance(L, -1, "DataModel");
-    lua_pop(L, 1);
-
-    ServiceProvider::createService(L, game, "FunctionExplorer");
+    ServiceProvider::createService(L, datamodel, "FunctionExplorer");
 }
 
 #define getdebugname(closure) (closure->isC ? closure->c.debugname : (closure->l.p->debugname ? closure->l.p->debugname->data : nullptr))

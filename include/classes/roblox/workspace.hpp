@@ -1,18 +1,15 @@
 #pragma once
 
 #include "classes/roblox/instance.hpp"
-#include "lua.h"
 
 namespace fakeroblox {
 
-#define BINDLIST_KEY "renderstepbindlist"
-
-class RunService {
+class Workspace {
 public:
     static std::shared_ptr<rbxInstance> instance;
-    static void process(lua_State* L);
+
 };
 
-void rbxInstance_RunService_init(lua_State* L);
+void rbxInstance_Workspace_init(lua_State* L);
 
 }; // namespace fakeroblox

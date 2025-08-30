@@ -49,7 +49,7 @@ void renderNode(lua_State* L, std::shared_ptr<rbxInstance> instance, std::vector
 
     if (instance && ImGui::BeginPopupContextItem()) {
         const bool not_creatable = instance->_class->tags & rbxClass::NotCreatable;
-        const bool not_archivable = !getValue<bool>(instance, PROP_INSTANCE_ARCHIVABLE);
+        const bool not_archivable = !getInstanceValue<bool>(instance, PROP_INSTANCE_ARCHIVABLE);
 
         if (not_creatable || not_archivable)
             ImGui::BeginDisabled();
@@ -86,7 +86,7 @@ void renderInstance(lua_State* L, std::shared_ptr<rbxInstance>& instance) {
 
     std::shared_lock instance_children_lock(instance->children_mutex);
 
-    auto object_name = getValue<std::string>(instance, PROP_INSTANCE_NAME);
+    auto object_name = getInstanceValue<std::string>(instance, PROP_INSTANCE_NAME);
     if (show_address_near_name) {
         char buf[50];
         snprintf(buf, 50, " (%p)", instance.get());
@@ -217,7 +217,7 @@ void UI_InstanceExplorer_render(lua_State *L) {
             case ContextQueueItem::Clone: {
                 auto clone = cloneInstance(L, instance);
                 if (clone) {
-                    setInstanceParent(L, clone, getValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT), true);
+                    setInstanceParent(L, clone, getInstanceValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT), true);
                     selected_instance = clone;
                 }
                 // TODO: notification system; notify(attempt to clone an instance that's not Archivable!)
@@ -239,7 +239,7 @@ void UI_InstanceExplorer_render(lua_State *L) {
     const auto& rbxinstance_parent_property = rbxClass::class_map["Instance"]->properties["Parent"];
 
     if (auto selected = selected_instance.lock()) {
-        auto selected_name = getValue<std::string>(selected, PROP_INSTANCE_NAME);
+        auto selected_name = getInstanceValue<std::string>(selected, PROP_INSTANCE_NAME);
         ImGui::Text("%.*s", static_cast<int>(selected_name.size()), selected_name.c_str());
 
         ImGui::SeparatorText("Properties");

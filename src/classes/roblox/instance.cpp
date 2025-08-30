@@ -14,6 +14,7 @@
 #include "classes/roblox/runservice.hpp"
 #include "classes/roblox/serviceprovider.hpp"
 #include "classes/roblox/userinputservice.hpp"
+#include "classes/roblox/workspace.hpp"
 #include "classes/vector2.hpp"
 #include "classes/vector3.hpp"
 
@@ -128,7 +129,7 @@ std::shared_ptr<rbxInstance> rbxInstance::findFirstChild(std::string name) {
     std::lock_guard children_lock(children_mutex);
 
     for (size_t i = 0; i < children.size(); i++)
-        if (getValue<std::string>(children[i], PROP_INSTANCE_NAME) == name)
+        if (getInstanceValue<std::string>(children[i], PROP_INSTANCE_NAME) == name)
             return children[i];
     return nullptr;
 }
@@ -156,7 +157,7 @@ std::vector<std::shared_ptr<rbxInstance>>getDescendants(std::shared_ptr<rbxInsta
 bool isDescendantOf(std::shared_ptr<rbxInstance> instance, std::shared_ptr<rbxInstance> other) {
     LUAU_ASSERT(other);
 
-    auto parent = getValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
+    auto parent = getInstanceValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
     if (!parent)
         return false;
 
@@ -164,7 +165,7 @@ bool isDescendantOf(std::shared_ptr<rbxInstance> instance, std::shared_ptr<rbxIn
         if (parent == other)
             return true;
 
-        parent = getValue<std::shared_ptr<rbxInstance>>(parent, PROP_INSTANCE_PARENT);
+        parent = getInstanceValue<std::shared_ptr<rbxInstance>>(parent, PROP_INSTANCE_PARENT);
     } while (parent);
 
     return false;
@@ -194,11 +195,10 @@ std::shared_ptr<rbxInstance>& lua_checkinstance(lua_State* L, int narg, const ch
     return *instance;
 }
 std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int narg, const char* class_name) {
-    if (lua_gettop(L) < narg)
+    if (lua_isnoneornil(L, narg))
         return nullptr;
 
-    if (lua_type(L, narg) == LUA_TNIL)
-        return nullptr;
+    luaL_argexpected(L, lua_isuserdata(L, narg), narg, "userdata or nil");
 
     return lua_checkinstance(L, narg, class_name);
 }
@@ -267,8 +267,8 @@ namespace rbxInstance_methods {
         std::shared_ptr<rbxInstance> inst = instance;
         do {
             result.insert(result.begin(), '.');
-            result.insert(0, getValue<std::string>(inst, PROP_INSTANCE_NAME));
-            inst = getValue<std::shared_ptr<rbxInstance>>(inst, PROP_INSTANCE_PARENT);
+            result.insert(0, getInstanceValue<std::string>(inst, PROP_INSTANCE_NAME));
+            inst = getInstanceValue<std::shared_ptr<rbxInstance>>(inst, PROP_INSTANCE_PARENT);
         } while (inst);
 
         size_t last = result.size() - 1;
@@ -313,7 +313,7 @@ namespace rbxInstance_methods {
 
 int rbxInstance__tostring(lua_State* L) {
     std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
-    auto name = getValue<std::string>(instance, PROP_INSTANCE_NAME);
+    auto name = getInstanceValue<std::string>(instance, PROP_INSTANCE_NAME);
     lua_pushlstring(L, name.c_str(), name.size());
     return 1;
 }
@@ -337,7 +337,7 @@ int rbxInstance__index(lua_State* L) {
     std::shared_ptr<rbxInstance> instance = lua_checkinstance(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
-    auto class_name = getValue<std::string>(instance, PROP_INSTANCE_CLASS_NAME);
+    auto class_name = getInstanceValue<std::string>(instance, PROP_INSTANCE_CLASS_NAME);
     if (instance->values.find(key) == instance->values.end()) {
         if (instance->methods.find(key) != instance->methods.end())
             return pushMethod(L, instance, key);
@@ -426,18 +426,18 @@ int rbxInstance__index(lua_State* L) {
     }
 
     INVALID_MEMBER:
-    auto name = getValue<std::string>(instance, PROP_INSTANCE_NAME);
+    auto name = getInstanceValue<std::string>(instance, PROP_INSTANCE_NAME);
     luaL_error(L, "%s is not a valid member of %s \"%s\"", key, class_name.c_str(), name.c_str());
 };
 
 const char* getOptionalInstanceName(std::shared_ptr<rbxInstance> instance) {
     if (!instance)
         return "NULL";
-    return getValue<std::string>(instance, PROP_INSTANCE_NAME).c_str();
+    return getInstanceValue<std::string>(instance, PROP_INSTANCE_NAME).c_str();
 }
 
 void setInstanceParent(lua_State* L, std::shared_ptr<rbxInstance> instance, std::shared_ptr<rbxInstance> new_parent, bool dont_remove_from_old_parent_children, bool dont_set_value) {
-    std::shared_ptr<rbxInstance> old_parent = getValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
+    std::shared_ptr<rbxInstance> old_parent = getInstanceValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
 
     std::shared_lock parent_locked_lock(instance->parent_locked_mutex);
     if (instance->parent_locked)
@@ -487,7 +487,7 @@ std::vector<std::weak_ptr<rbxInstance>> getNilInstances() {
         auto child = rbxInstance::instance_list[i].lock();
         if (!child)
             continue;
-        if (getValue<std::shared_ptr<rbxInstance>>(child, PROP_INSTANCE_PARENT))
+        if (getInstanceValue<std::shared_ptr<rbxInstance>>(child, PROP_INSTANCE_PARENT))
             continue;
 
         nil_instances.push_back(child);
@@ -518,7 +518,7 @@ int rbxInstance__newindex(lua_State* L) {
     const char* key = luaL_checkstring(L, 2);
     luaL_checkany(L, 3);
 
-    auto class_name = getValue<std::string>(instance, PROP_INSTANCE_CLASS_NAME);
+    auto class_name = getInstanceValue<std::string>(instance, PROP_INSTANCE_CLASS_NAME);
     if (instance->values.find(key) == instance->values.end())
         goto INVALID_MEMBER;
 
@@ -544,24 +544,24 @@ int rbxInstance__newindex(lua_State* L) {
 
             if (std::holds_alternative<bool>(value->value)) {
                 const bool new_value = luaL_checkboolean(L, 3);
-                setValue(instance, L, key, new_value);
+                setInstanceValue(instance, L, key, new_value);
             } else if (std::holds_alternative<int32_t>(value->value)) {
                 const int32_t new_value = luaL_checkinteger(L, 3);
-                setValue(instance, L, key, new_value);
+                setInstanceValue(instance, L, key, new_value);
             } else if (std::holds_alternative<int64_t>(value->value)) {
                 const int64_t new_value = luaL_checkinteger(L, 3);
-                setValue(instance, L, key, new_value);
+                setInstanceValue(instance, L, key, new_value);
             } else if (std::holds_alternative<float>(value->value)) {
                 const float new_value = luaL_checknumber(L, 3);
-                setValue(instance, L, key, new_value);
+                setInstanceValue(instance, L, key, new_value);
             } else if (std::holds_alternative<double>(value->value)) {
                 const double new_value = luaL_checknumber(L, 3);
-                setValue(instance, L, key, new_value);
+                setInstanceValue(instance, L, key, new_value);
             } else if (std::holds_alternative<std::string>(value->value)) {
                 size_t l;
                 const char* str = luaL_checklstring(L, 3, &l);
                 const std::string new_value = std::string(str, l);
-                setValue(instance, L, key, new_value);
+                setInstanceValue(instance, L, key, new_value);
             } else if (std::holds_alternative<rbxCallback>(value->value)) {
                 luaL_checktype(L, 3, LUA_TFUNCTION);
                 auto& current = std::get<rbxCallback>(value->value);
@@ -580,30 +580,30 @@ int rbxInstance__newindex(lua_State* L) {
         case DataType:
             if (std::holds_alternative<EnumItemWrapper>(value->value)) {
                 const std::string new_value = lua_checkenumitem(L, 3)->name;
-                setValue(instance, L, key, new_value);
+                setInstanceValue(instance, L, key, new_value);
 
             } else if (std::holds_alternative<Color>(value->value)) {
                 const auto new_value = lua_checkcolor(L, 3);
-                setValue(instance, L, key, *new_value);
+                setInstanceValue(instance, L, key, *new_value);
             } else if (std::holds_alternative<Vector2>(value->value)) {
                 const auto new_value = lua_checkvector2(L, 3);
-                setValue(instance, L, key, *new_value);
+                setInstanceValue(instance, L, key, *new_value);
             } else if (std::holds_alternative<Vector3>(value->value)) {
                 const auto new_value = lua_checkvector3(L, 3);
-                setValue(instance, L, key, *new_value);
+                setInstanceValue(instance, L, key, *new_value);
             } else if (std::holds_alternative<UDim>(value->value)) {
                 const auto new_value = lua_checkudim(L, 3);
-                setValue(instance, L, key, *new_value);
+                setInstanceValue(instance, L, key, *new_value);
             } else if (std::holds_alternative<UDim2>(value->value)) {
                 const auto new_value = lua_checkudim2(L, 3);
-                setValue(instance, L, key, *new_value);
+                setInstanceValue(instance, L, key, *new_value);
             } else
                 assert(!"UNHANDLED ALTERNATIVE FOR DATATYPE VALUE");
 
             break;
         case Instance: {
             std::shared_ptr<rbxInstance> new_value = lua_optinstance(L, 3);
-            setValue(instance, L, key, new_value);
+            setInstanceValue(instance, L, key, new_value);
             break;
         }
 
@@ -615,7 +615,7 @@ int rbxInstance__newindex(lua_State* L) {
     return 0;
 
     INVALID_MEMBER:
-    auto name = getValue<std::string>(instance, PROP_INSTANCE_NAME);
+    auto name = getInstanceValue<std::string>(instance, PROP_INSTANCE_NAME);
     luaL_error(L, "%s is not a valid member of %s \"%s\"", key, class_name.c_str(), name.c_str());
 };
 int rbxInstance__namecall(lua_State* L) {
@@ -626,8 +626,8 @@ int rbxInstance__namecall(lua_State* L) {
     std::string method_name = namecall;
 
     if (instance->methods.find(method_name) == instance->methods.end()) {
-        auto name = getValue<std::string>(instance, PROP_INSTANCE_NAME);
-        auto class_name = getValue<std::string>(instance, PROP_INSTANCE_CLASS_NAME);
+        auto name = getInstanceValue<std::string>(instance, PROP_INSTANCE_NAME);
+        auto class_name = getInstanceValue<std::string>(instance, PROP_INSTANCE_CLASS_NAME);
         luaL_error(L, "%s is not a valid member of %s \"%s\"", namecall, class_name.c_str(), name.c_str());
     }
 
@@ -673,9 +673,9 @@ std::shared_ptr<rbxInstance> newInstance(lua_State* L, const char* class_name, s
 
     // FIXME: more default values
     // FIXME: unique_id
-    setValue<bool>(instance, L, PROP_INSTANCE_ARCHIVABLE, true, true);
-    setValue<std::string>(instance, L, PROP_INSTANCE_NAME, class_name, true);
-    setValue<std::string>(instance, L, PROP_INSTANCE_CLASS_NAME, class_name, true);
+    setInstanceValue<bool>(instance, L, PROP_INSTANCE_ARCHIVABLE, true, true);
+    setInstanceValue<std::string>(instance, L, PROP_INSTANCE_NAME, class_name, true);
+    setInstanceValue<std::string>(instance, L, PROP_INSTANCE_CLASS_NAME, class_name, true);
     setInstanceParent(L, instance, parent);
 
     std::lock_guard instance_list_lock(rbxInstance::instance_list_mutex);
@@ -684,8 +684,8 @@ std::shared_ptr<rbxInstance> newInstance(lua_State* L, const char* class_name, s
     return instance;
 }
 std::shared_ptr<rbxInstance> cloneInstance(lua_State* L, std::shared_ptr<rbxInstance> reference, bool is_deep, std::optional<std::map<std::shared_ptr<rbxInstance>, std::shared_ptr<rbxInstance>>*> cloned_map) {
-    auto instance = newInstance(L, getValue<std::string>(reference, PROP_INSTANCE_CLASS_NAME).c_str());
-    if (is_deep && !getValue<bool>(reference, PROP_INSTANCE_ARCHIVABLE))
+    auto instance = newInstance(L, getInstanceValue<std::string>(reference, PROP_INSTANCE_CLASS_NAME).c_str());
+    if (is_deep && !getInstanceValue<bool>(reference, PROP_INSTANCE_ARCHIVABLE))
         return nullptr;
 
     rbxClass* c = instance->_class.get();
@@ -734,10 +734,10 @@ std::shared_ptr<rbxInstance> cloneInstance(lua_State* L, std::shared_ptr<rbxInst
             while (c) {
                 for (auto& property : c->properties)
                     if (property.second->type_category == Instance && property.first != PROP_INSTANCE_PARENT) {
-                        auto value = getValue<std::shared_ptr<rbxInstance>>(pair.second, property.first);
+                        auto value = getInstanceValue<std::shared_ptr<rbxInstance>>(pair.second, property.first);
                         auto it = (*cloned_map)->find(value);
                         if (it != (*cloned_map)->end())
-                            setValue<std::shared_ptr<rbxInstance>>(pair.second, L, property.first, it->second, true);
+                            setInstanceValue<std::shared_ptr<rbxInstance>>(pair.second, L, property.first, it->second, true);
                     }
                 c = c->superclass.get();
             }
@@ -789,9 +789,9 @@ static int fr_getcallbackvalue(lua_State* L) {
     auto instance = lua_checkinstance(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
-    auto class_name = getValue<std::string>(instance, PROP_INSTANCE_CLASS_NAME);
+    auto class_name = getInstanceValue<std::string>(instance, PROP_INSTANCE_CLASS_NAME);
     if (instance->values.find(key) == instance->values.end()) {
-        auto name = getValue<std::string>(instance, PROP_INSTANCE_NAME);
+        auto name = getInstanceValue<std::string>(instance, PROP_INSTANCE_NAME);
         luaL_error(L, "%s is not a valid member of %s \"%s\"", key, class_name.c_str(), name.c_str());
     }
     auto value = &instance->values[key];
@@ -812,9 +812,9 @@ static int fr_isscriptable(lua_State* L) {
     auto instance = lua_checkinstance(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
-    auto class_name = getValue<std::string>(instance, PROP_INSTANCE_CLASS_NAME);
+    auto class_name = getInstanceValue<std::string>(instance, PROP_INSTANCE_CLASS_NAME);
     if (instance->values.find(key) == instance->values.end()) {
-        auto name = getValue<std::string>(instance, PROP_INSTANCE_NAME);
+        auto name = getInstanceValue<std::string>(instance, PROP_INSTANCE_NAME);
         luaL_error(L, "%s is not a valid member of %s \"%s\"", key, class_name.c_str(), name.c_str());
     }
     auto value = &instance->values[key];
@@ -828,9 +828,9 @@ static int fr_setscriptable(lua_State* L) {
     const char* key = luaL_checkstring(L, 2);
     const bool new_value = luaL_checkboolean(L, 3);
 
-    auto class_name = getValue<std::string>(instance, PROP_INSTANCE_CLASS_NAME);
+    auto class_name = getInstanceValue<std::string>(instance, PROP_INSTANCE_CLASS_NAME);
     if (instance->values.find(key) == instance->values.end()) {
-        auto name = getValue<std::string>(instance, PROP_INSTANCE_NAME);
+        auto name = getInstanceValue<std::string>(instance, PROP_INSTANCE_NAME);
         luaL_error(L, "%s is not a valid member of %s \"%s\"", key, class_name.c_str(), name.c_str());
     }
     auto value = &instance->values[key];
@@ -1028,6 +1028,7 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
     // metatable
     luaL_newmetatable(L, "Instance");
 
+    settypemetafield(L, "Instance");
     setfunctionfield(L, rbxInstance__tostring, "__tostring", nullptr);
     setfunctionfield(L, rbxInstance__index, "__index", nullptr);
     setfunctionfield(L, rbxInstance__newindex, "__newindex", nullptr);
@@ -1051,7 +1052,9 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
     rbxInstance_HttpService_init();
 
     auto datamodel = newInstance(L, "DataModel");
-    setValue<std::string>(datamodel, L, PROP_INSTANCE_NAME, "FakeRoblox");
+    setInstanceValue<std::string>(datamodel, L, PROP_INSTANCE_NAME, "FakeRoblox");
+
+    DataModel::instance = datamodel;
 
     lua_pushinstance(L, datamodel);
     lua_pushvalue(L, -1);
@@ -1059,6 +1062,9 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
     lua_setglobal(L, "Game");
 
     auto workspace = ServiceProvider::getService(L, datamodel, "Workspace");
+
+    Workspace::instance = workspace;
+
     lua_pushinstance(L, workspace);
     lua_pushvalue(L, -1);
     lua_setglobal(L, "workspace");
@@ -1076,6 +1082,7 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
     rbxInstance_BasePlayerGui_init(L, { coregui, hiddenui });
     rbxInstance_UserInputService_init();
     rbxInstance_RunService_init(L);
+    RunService::instance = ServiceProvider::getService(L, datamodel, "RunService");
 
     rbxInstance_Camera_init(L, workspace);
     rbxInstance_LayerCollector_init();

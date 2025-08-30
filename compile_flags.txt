@@ -5,6 +5,7 @@
 -Idependencies/curl/include
 -Idependencies/simde
 -Idependencies/uuid_v4
+-Idependencies/ImGuiFileDialog
 
 -Idependencies/Luau/Analysis/include
 -Idependencies/Luau/Ast/include

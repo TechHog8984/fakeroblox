@@ -1,4 +1,5 @@
 #include "libraries/drawentrylib.hpp"
+#include "basedrawing.hpp"
 #include "classes/color3.hpp"
 #include "classes/vector2.hpp"
 #include "common.hpp"
@@ -20,7 +21,8 @@ std::shared_mutex DrawEntry::draw_list_mutex;
 void sortDrawList() {
     std::lock_guard lock(DrawEntry::draw_list_mutex);
 
-    std::sort(DrawEntry::draw_list.begin(), DrawEntry::draw_list.end(), [] (DrawEntry* a, DrawEntry* b) {
+    // TODO: use a std::set if stable sort is still possible (see drawingimmediate)
+    std::stable_sort(DrawEntry::draw_list.begin(), DrawEntry::draw_list.end(), [] (DrawEntry* a, DrawEntry* b) {
         return a->zindex < b->zindex;
     });
 }
@@ -204,6 +206,11 @@ static int DrawEntry_new(lua_State* L) {
     return 1;
 }
 
+DrawEntry* lua_checkdrawentry(lua_State* L, int index) {
+    DrawEntry* obj = static_cast<DrawEntry*>(luaL_checkudata(L, index, "DrawEntry"));
+    return obj;
+}
+
 DrawEntry* DrawEntry::clone(lua_State* L) {
     DrawEntry* entry = pushNewDrawEntry(L, class_name);
 
@@ -325,7 +332,7 @@ static int DrawEntryGlobal__newindex(lua_State* L) {
     const char* key = luaL_checkstring(L, 2);
 
     if (strequal(key, "DefaultFont"))
-        DrawEntryText::default_font = luaL_checknumberrange(L, 3, 0, FontLoader::font_count - 1);
+        DrawEntryText::default_font = luaL_checknumberrange(L, 3, 0, FontLoader::font_count - 1, "DefaultFont");
     else
         lua_rawset(L, 1);
 
@@ -334,7 +341,7 @@ static int DrawEntryGlobal__newindex(lua_State* L) {
 
 namespace DrawEntry_methods {
     static int remove(lua_State* L) {
-        DrawEntry* obj = static_cast<DrawEntry*>(luaL_checkudata(L, 1, "DrawEntry"));
+        DrawEntry* obj = lua_checkdrawentry(L, 1);
 
         if (!obj->alive)
             luaL_error(L, "INTERNAL TODO: determine remove behavior when DrawEntry is already removed");
@@ -343,7 +350,7 @@ namespace DrawEntry_methods {
         return 0;
     }
     static int clone(lua_State* L) {
-        DrawEntry* obj = static_cast<DrawEntry*>(luaL_checkudata(L, 1, "DrawEntry"));
+        DrawEntry* obj = lua_checkdrawentry(L, 1);
 
         if (!obj->alive)
             luaL_error(L, "INTERNAL TODO: determine clone behavior when DrawEntry is already removed");
@@ -354,7 +361,7 @@ namespace DrawEntry_methods {
 };
 
 static int DrawEntry__tostring(lua_State* L) {
-    DrawEntry* entry = static_cast<DrawEntry*>(luaL_checkudata(L, 1, "DrawEntry"));
+    DrawEntry* entry = lua_checkdrawentry(L, 1);
 
     lua_pushstring(L, entry->class_name);
     return 1;
@@ -369,8 +376,8 @@ lua_CFunction getDrawEntryMethod(DrawEntry* entry, const char* key) {
     return nullptr;
 }
 
-static int DrawEntry__index(lua_State* L) {
-    DrawEntry* entry = static_cast<DrawEntry*>(luaL_checkudata(L, 1, "DrawEntry"));
+int DrawEntry__index(lua_State* L) {
+    DrawEntry* entry = lua_checkdrawentry(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     // god i hate skids
@@ -387,7 +394,7 @@ static int DrawEntry__index(lua_State* L) {
     else if (strequal(key, "ZIndex"))
         lua_pushinteger(L, entry->zindex);
     else if (strequal(key, "Transparency") || strequal(key, "Opacity"))
-        lua_pushnumber(L, entry->color.a / 255.0);
+        lua_pushnumber(L, entry->color.a / 255.f);
     else if (strequal(key, "Color"))
         pushColor(L, entry->color);
     else {
@@ -428,7 +435,7 @@ static int DrawEntry__index(lua_State* L) {
                     pushColor(L, entry_text->outline_color);
                 // NOTE: OutlineOpacity is a temp fix for unnamed esp
                 else if (strequal(key, "OutlineOpacity"))
-                    lua_pushnumber(L, entry_text->outline_color.a / 255.0);
+                    lua_pushnumber(L, entry_text->outline_color.a / 255.f);
                 else if (strequal(key, "Position"))
                     pushVector2(L, entry_text->position);
                 else
@@ -534,8 +541,8 @@ static int DrawEntry__index(lua_State* L) {
     luaL_error(L, "%s is not a valid member of %s", key, entry->class_name);
 }
 
-static int DrawEntry__newindex(lua_State* L) {
-    DrawEntry* entry = static_cast<DrawEntry*>(luaL_checkudata(L, 1, "DrawEntry"));
+int DrawEntry__newindex(lua_State* L) {
+    DrawEntry* entry = lua_checkdrawentry(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     // god i hate skids
@@ -552,7 +559,7 @@ static int DrawEntry__newindex(lua_State* L) {
         entry->zindex = luaL_checkinteger(L, 3);
         entry->onZIndexUpdate();
     } else if (strequal(key, "Transparency") || strequal(key, "Opacity")) {
-        double alpha = luaL_checknumberrange(L, 3, 0, 1) * 255.0;
+        double alpha = luaL_checknumberrange(L, 3, 0, 1, "Transparency") * 255.f;
         entry->color.a = alpha;
         if (entry->type == DrawEntry::DrawTypeText)
             static_cast<DrawEntryText*>(entry)->outline_color.a = alpha;
@@ -585,11 +592,11 @@ static int DrawEntry__newindex(lua_State* L) {
                 } else if (strequal(key, "TextBounds"))
                     goto READONLY;
                 else if (strequal(key, "Size") || strequal(key, "TextSize") || strequal(key, "FontSize")) {
-                    entry_text->text_size = luaL_checknumberrange(L, 3, 0, static_cast<unsigned>(-1));
+                    entry_text->text_size = luaL_checknumberrange(L, 3, 0, static_cast<unsigned>(-1), "Size");
                     entry_text->updateTextBounds();
                     entry_text->updateOutline();
                 } else if (strequal(key, "Font")) {
-                    if (lua_isstring(L, 3) && !lua_isnumber(L, 3)) {
+                    if (lua_type(L, 3) == LUA_TSTRING) {
                         size_t l;
                         const char* str = luaL_checklstring(L, 3, &l);
                         std::string data(str, l);
@@ -598,7 +605,7 @@ static int DrawEntry__newindex(lua_State* L) {
                         entry_text->custom_font_data = data;
                         entry_text->updateCustomFont();
                     } else {
-                        entry_text->font_index = luaL_checknumberrange(L, 3, 0, FontLoader::font_count - 1);
+                        entry_text->font_index = luaL_checknumberrange(L, 3, 0, FontLoader::font_count - 1, "Font");
                         entry_text->updateFont();
                     }
                 } else if (strequal(key, "Centered") || strequal(key, "Center"))
@@ -610,7 +617,7 @@ static int DrawEntry__newindex(lua_State* L) {
                     entry_text->outline_color.a = entry->color.a;
                 // NOTE: OutlineOpacity is a temp fix for unnamed esp
                 } else if (strequal(key, "OutlineOpacity")) {
-                    entry_text->outline_color.a = luaL_checknumberrange(L, 3, 0, 1) * 255.0;
+                    entry_text->outline_color.a = luaL_checknumberrange(L, 3, 0, 1, "OutlineOpacity") * 255.f;
                 } else if (strequal(key, "Position")) {
                     entry_text->position = *lua_checkvector2(L, 3);
                     entry_text->updateOutline();
@@ -729,7 +736,7 @@ static int DrawEntry__newindex(lua_State* L) {
     luaL_error(L, "Unable to assign property %s. Property is read only", key);
 }
 static int DrawEntry__namecall(lua_State* L) {
-    DrawEntry* entry = static_cast<DrawEntry*>(luaL_checkudata(L, 1, "DrawEntry"));
+    DrawEntry* entry = lua_checkdrawentry(L, 1);
     const char* namecall = lua_namecallatom(L, nullptr);
     if (!namecall)
         luaL_error(L, "no namecall method!");
@@ -785,20 +792,20 @@ void open_drawentrylib(lua_State *L) {
 }
 
 void DrawEntry::clear(lua_State *L) {
-    std::lock_guard draw_list_lock(DrawEntry::draw_list_mutex);
+    std::lock_guard draw_list_lock(draw_list_mutex);
 
-    while (!DrawEntry::draw_list.empty()) {
-        auto& entry = DrawEntry::draw_list.back();
+    while (!draw_list.empty()) {
+        auto& entry = draw_list.back();
         entry->destroy(L, true);
-        DrawEntry::draw_list.pop_back();
+        draw_list.pop_back();
     }
 }
 
 void DrawEntry::render() {
-    std::lock_guard draw_list_lock(DrawEntry::draw_list_mutex);
+    std::lock_guard draw_list_lock(draw_list_mutex);
 
-    for (size_t i = 0; i < DrawEntry::draw_list.size(); i++) {
-        DrawEntry* entry = DrawEntry::draw_list[i];
+    for (size_t i = 0; i < draw_list.size(); i++) {
+        DrawEntry* entry = draw_list[i];
         std::lock_guard members_lock(entry->members_mutex);
 
         if (!entry->visible)
@@ -806,32 +813,22 @@ void DrawEntry::render() {
 
         auto& color = entry->color;
         switch (entry->type) {
-            case DrawEntry::DrawTypeLine: {
+            case DrawTypeLine: {
                 DrawEntryLine* entry_line = static_cast<DrawEntryLine*>(entry);
-                DrawLineEx(entry_line->from, entry_line->to, entry_line->thickness, color);
+                drawingDrawLine(&entry_line->from, &entry_line->to, &color, entry_line->thickness);
                 break;
             }
-            case DrawEntry::DrawTypeText: {
+            case DrawTypeText: {
                 DrawEntryText* entry_text = static_cast<DrawEntryText*>(entry);
                 auto position = entry_text->position;
                 if (entry_text->centered) {
                     position.x -= entry_text->text_bounds.x / 2.f;
                     position.y -= entry_text->text_bounds.y / 2.f;
                 }
-                if (entry_text->outlined) {
-                    // top
-                    DrawTextEx(*entry_text->font, entry_text->text.c_str(), { .x = position.x, .y = position.y - 1 }, entry_text->text_size, 0, entry_text->outline_color);
-                    // right
-                    DrawTextEx(*entry_text->font, entry_text->text.c_str(), { .x = position.x + 1, .y = position.y }, entry_text->text_size, 0, entry_text->outline_color);
-                    // bottom
-                    DrawTextEx(*entry_text->font, entry_text->text.c_str(), { .x = position.x - 1, .y = position.y + 1 }, entry_text->text_size, 0, entry_text->outline_color);
-                    // left
-                    DrawTextEx(*entry_text->font, entry_text->text.c_str(), { .x = position.x - 1, .y = position.y }, entry_text->text_size, 0, entry_text->outline_color);
-                }
-                DrawTextEx(*entry_text->font, entry_text->text.c_str(), position, entry_text->text_size, 0, color);
+                drawingDrawText(&position, entry_text->font, entry_text->text_size, &color, entry_text->outlined, &entry_text->outline_color, entry_text->text);
                 break;
             }
-            case DrawEntry::DrawTypeImage: {
+            case DrawTypeImage: {
                 DrawEntryImage* entry_image = static_cast<DrawEntryImage*>(entry);
                 // BeginBlendMode(BLEND_SUBTRACT_COLORS);
                 DrawTexture(entry_image->texture, entry_image->position.x, entry_image->position.y, color);
@@ -840,47 +837,24 @@ void DrawEntry::render() {
 
                 break;
             }
-            case DrawEntry::DrawTypeCircle: {
+            case DrawTypeCircle: {
                 DrawEntryCircle* entry_circle = static_cast<DrawEntryCircle*>(entry);
-                if (entry_circle->num_sides) {
-                    DrawPolyLines(entry_circle->center, entry_circle->num_sides, entry_circle->radius, 0, color);
-                    if (entry_circle->filled)
-                        DrawPoly(entry_circle->center, entry_circle->num_sides, entry_circle->radius, 0, color);
-                } else {
-                    DrawCircleLinesV(entry_circle->center, entry_circle->radius, color);
-                    if (entry_circle->filled)
-                        DrawCircleV(entry_circle->center, entry_circle->radius, color);
-                }
+                drawingDrawCircle(&entry_circle->center, entry_circle->radius, &color, entry_circle->num_sides, entry_circle->thickness, entry_circle->filled);
                 break;
             }
-            case DrawEntry::DrawTypeSquare: {
+            case DrawTypeSquare: {
                 DrawEntrySquare* entry_square = static_cast<DrawEntrySquare*>(entry);
-                DrawRectangleLinesEx(entry_square->rect, entry_square->thickness, color);
-                if (entry_square->filled)
-                    DrawRectangleRec(entry_square->rect, color);
+                drawingDrawRectangle(&entry_square->rect, &color, 0, entry_square->thickness, entry_square->filled);
                 break;
             }
-            case DrawEntry::DrawTypeTriangle: {
+            case DrawTypeTriangle: {
                 DrawEntryTriangle* entry_triangle = static_cast<DrawEntryTriangle*>(entry);
-                // DrawTriangle* doesn't support thickness, so we use DrawLineEx
-                DrawLineEx(entry_triangle->pointa, entry_triangle->pointb, entry_triangle->thickness, color);
-                DrawLineEx(entry_triangle->pointb, entry_triangle->pointc, entry_triangle->thickness, color);
-                DrawLineEx(entry_triangle->pointc, entry_triangle->pointa, entry_triangle->thickness, color);
-                if (entry_triangle->filled)
-                    DrawTriangle(entry_triangle->pointc, entry_triangle->pointb, entry_triangle->pointa, color);
+                drawingDrawTriangle(&entry_triangle->pointa, &entry_triangle->pointb, &entry_triangle->pointc, &color, entry_triangle->thickness, entry_triangle->filled);
                 break;
             }
-            case DrawEntry::DrawTypeQuad: {
+            case DrawTypeQuad: {
                 DrawEntryQuad* entry_quad = static_cast<DrawEntryQuad*>(entry);
-                // DrawTriangle* doesn't support thickness, so we use DrawLineEx
-                DrawLineEx(entry_quad->pointa, entry_quad->pointb, entry_quad->thickness, color);
-                DrawLineEx(entry_quad->pointb, entry_quad->pointc, entry_quad->thickness, color);
-                DrawLineEx(entry_quad->pointc, entry_quad->pointd, entry_quad->thickness, color);
-                DrawLineEx(entry_quad->pointd, entry_quad->pointa, entry_quad->thickness, color);
-                if (entry_quad->filled) {
-                    DrawTriangle(entry_quad->pointc, entry_quad->pointb, entry_quad->pointa, color);
-                    DrawTriangle(entry_quad->pointd, entry_quad->pointc, entry_quad->pointa, color);
-                }
+                drawingDrawQuad(&entry_quad->pointa, &entry_quad->pointb, &entry_quad->pointc, &entry_quad->pointd, &color, entry_quad->thickness, entry_quad->filled);
                 break;
             }
         }

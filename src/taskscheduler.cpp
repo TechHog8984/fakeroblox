@@ -38,6 +38,27 @@ const char* taskStatusTostring(TaskStatus status) {
     }
 };
 
+const char* capabilityTostring(ThreadCapability capability) {
+    switch (capability) {
+        case NONE:
+            return "None (0)";
+        case PLUGIN_SECURITY:
+            return "PluginSecurity (1)";
+        case LOCAL_USER_SECURITY:
+            return "LocalUserSecurity (3)";
+        case WRITE_PLAYER_SECURITY:
+            return "WritePlayerSecurity (4)";
+        case ROBLOX_SCRIPT_SECURITY:
+            return "RobloxScriptSecurity (5)";
+        case ROBLOX_SECURITY:
+            return "RobloxSecurity (6)";
+        case NOT_ACCESSIBLE_SECURITY:
+            return "NotAccessibleSecurity (7)";
+        default:
+            return "unknown";
+    }
+};
+
 bool TaskScheduler::sandboxing = true;
 
 int TaskScheduler::target_fps = 240;
@@ -91,6 +112,8 @@ void TaskScheduler::setup(lua_State *L) {
 
             task->canceled = false;
             task->arg_count = 0;
+
+            task->capability = ROBLOX_SECURITY;
 
             lua_setthreaddata(thread, task);
 
@@ -246,23 +269,33 @@ void TaskScheduler::startCodeOnNewThread(lua_State* L, const char* chunk_name, c
     tryResumeThreadRaw(thread);
 }
 
-int TaskScheduler::yieldForWork(lua_State* thread, Workload work) {
+int TaskScheduler::yieldThread(lua_State* thread) {
     Task* task = getTask(thread);
+    assert(task);
 
     task->status = TaskStatus::YIELDING;
-    int r = lua_yield(thread, 0);
+    return lua_yield(thread, 0);
+}
 
-    std::thread t([thread, task, work] {
+int TaskScheduler::yieldForWork(lua_State* thread, Workload work) {
+    Task* task = getTask(thread);
+    assert(task);
+
+    int r = yieldThread(thread);
+
+    std::thread t([thread, task, work]() {
+        int arg_count = 0;
         try {
-            task->arg_count = work(thread);
+            arg_count = work(thread);
         } catch(std::exception& e) {
+            killThread(thread);
             task->feedback(e.what());
             return;
         }
 
-        task->timing = TaskTiming { .type = TaskTiming::Instant };
-        TaskScheduler::queueThread(thread);
+        queueForResume(thread, arg_count);
     });
+
     t.detach();
 
     return r;
@@ -399,6 +432,15 @@ std::optional<PreSpawnResult> preTaskSpawn(lua_State* L, const char* func_name, 
 void TaskScheduler::queueThread(lua_State* thread) {
     std::lock_guard lock(thread_queue_mutex);
     thread_queue.push_back(thread);
+}
+
+void TaskScheduler::queueForResume(lua_State* thread, int arg_count) {
+    Task* task = getTask(thread);
+    assert(task);
+
+    task->arg_count = arg_count;
+    task->timing = TaskTiming { .type = TaskTiming::Instant };
+    TaskScheduler::queueThread(thread);
 }
 
 double getSeconds(lua_State* L, int arg = 1) {

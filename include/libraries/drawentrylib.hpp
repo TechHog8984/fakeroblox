@@ -80,7 +80,7 @@ public:
 
     bool centered = false;
     bool outlined = false;
-    Color outline_color{0, 0, 0};
+    Color outline_color{0, 0, 0, 255};
     Vector2 position{0, 0};
 
     DrawEntryText();
@@ -156,6 +156,8 @@ public:
 
 DrawEntry* pushNewDrawEntry(lua_State* L, const char* class_name);
 
+int DrawEntry__index(lua_State* L);
+int DrawEntry__newindex(lua_State* L);
 void open_drawentrylib(lua_State* L);
 
 }; // namespace fakeroblox

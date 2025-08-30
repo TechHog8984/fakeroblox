@@ -31,6 +31,21 @@ struct TaskTiming {
     double count = 0.0;
 };
 
+enum ThreadCapability {
+    LOWEST_CAPABILITY,
+
+    NONE = LOWEST_CAPABILITY,
+    PLUGIN_SECURITY,
+    INVALID_CAPABILITY = 2,
+    LOCAL_USER_SECURITY = 3,
+    WRITE_PLAYER_SECURITY,
+    ROBLOX_SCRIPT_SECURITY,
+    ROBLOX_SECURITY,
+    NOT_ACCESSIBLE_SECURITY,
+
+    HIGHEST_CAPABILTY = NOT_ACCESSIBLE_SECURITY
+};
+
 struct Task {
     TaskStatus status;
     lua_State* parent;
@@ -46,6 +61,8 @@ struct Task {
     // TODO: maybe just always use console and remove feedback
     Feedback feedback;
     OnKill on_kill;
+
+    ThreadCapability capability = NONE;
 
     struct {
         bool open = false;
@@ -82,11 +99,13 @@ public:
     static void killThread(lua_State* thread);
 
     static void queueThread(lua_State* thread);
+    static void queueForResume(lua_State* thread, int arg_count);
 
     // TODO: the api here is inconsistent (console instead of on_kill) since we only use this function in one place (tests)
     static void startFunctionOnNewThread(lua_State* L, Feedback feedback, Console* console = nullptr);
     static void startCodeOnNewThread(lua_State* L, const char* chunk_name, const char* code, size_t code_size, Feedback feedback, OnKill on_kill = nullptr, Console* console = nullptr);
 
+    static int yieldThread(lua_State* thread);
     static int yieldForWork(lua_State* thread, Workload work);
 
     static void run();
@@ -97,6 +116,7 @@ public:
 #define getTask(thread) (static_cast<Task*>(lua_getthreaddata(thread)))
 
 const char* taskStatusTostring(TaskStatus status);
+const char* capabilityTostring(ThreadCapability capability);
 
 void open_tasklib(lua_State* L);
 

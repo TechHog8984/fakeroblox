@@ -47,8 +47,8 @@ std::string fixString(std::string_view original);
 std::string safetostringobj(lua_State* L, const TValue* obj, bool use_fixstring = false);
 std::string safetostring(lua_State* L, int index);
 
-double luaL_checknumberrange(lua_State* L, int narg, double min, double max);
-double luaL_optnumberrange(lua_State* L, int narg, double min, double max, double def = 0);
+double luaL_checknumberrange(lua_State* L, int narg, double min, double max, const char* context);
+double luaL_optnumberrange(lua_State* L, int narg, double min, double max, const char* context, double def = 0);
 
 int newweaktable(lua_State* L);
 
@@ -97,6 +97,8 @@ int fr_warn(lua_State* L);
 void setfunctionfield(lua_State* L, lua_CFunction func, const char* method, const char* debugname, bool lookup = false);
 // if you keep lookup as false, NOTE that FunctionExplorer will ensure functions are in the lookup when explored
 void setfunctionfield(lua_State* L, lua_CFunction func, const char* method, bool lookup = false);
+
+void settypemetafield(lua_State* L, const char* type);
 
 std::string sha1ToString(unsigned int* hashed);
 
