@@ -21,9 +21,9 @@ To build dependencies, just run each script inside the dependencies folder with 
 ```bash
 cd dependencies
 
-python3 ./build_curl.sh & \
-python3 ./build_rlImGui.sh & \
-python3 ./build_luau.sh & \
+python3 ./build_curl.py & \
+python3 ./build_rlImGui.py & \
+python3 ./build_luau.py & \
 
 # after rlImGui has fetched imgui
 
