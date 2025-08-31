@@ -15,15 +15,19 @@ Issues, however, usually closely match the project's real state.
 # BUILDING
 NOTE: fakeroblox CURRENTLY does _not_ have a process for building neither for or on Windows. It is likely possible to cross compile via mingw, but that would require manual steps.
 
-fakeroblox uses [mate.h](https://github.com/TomasBorquez/mate.h/) for its core build system, along with some shell files (sorry) to build the dependencies.
+fakeroblox uses [mate.h](https://github.com/TomasBorquez/mate.h/) for its core build system, along with some python files to build the dependencies.
 <br>
-To build dependencies, just run each script inside the dependencies folder with bash:
+To build dependencies, just run each script inside the dependencies folder with python:
 ```bash
 cd dependencies
 
-bash ./build_curl.sh
-bash ./build_luau.sh
-bash ./build_rlImGui.sh
+python3 ./build_curl.sh & \
+python3 ./build_rlImGui.sh & \
+python3 ./build_luau.sh & \
+
+# after rlImGui has fetched imgui
+
+python3 ./build_ImGuiFileDialog.py
 
 cd ..
 ```
@@ -47,6 +51,7 @@ That's it! To build again, simply run `./mate` just like before and it will dete
 # NONGOALS
 * 3d graphics
 * networking
+* server (there is only the client and that is where everything exists)
 * rbxl or rbxm parsing
 
 Contributions to nongoals may be welcome (ONLY AFTER THE PROJECT IS AT A MORE STABLE STATE), but they aren't something I will be focusing on.
