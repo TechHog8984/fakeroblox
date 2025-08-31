@@ -3,7 +3,7 @@ from buildscripts.utils import *
 from pathlib import Path
 
 if __name__ == "__main__":
-    if not Path("./rlImGui/imgui-master"):
+    if not Path("./rlImGui/imgui-master").exists():
         fail_exit("run ./build_rlImGui.sh first (or ensure ./rlImGui/imgui-master)")
 
     change_directory("ImGuiFileDialog")
