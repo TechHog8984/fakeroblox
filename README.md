@@ -4,6 +4,8 @@ fakeroblox is an attempt to create a Luau environment that is as close to Roblox
 
 creation date: Jun 25, 2025
 
+![](repoassets/showcase1.png)
+
 # PROJECT STATE
 
 This project is in early development stages! This is why there is no Windows support!
