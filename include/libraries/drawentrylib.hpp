@@ -93,9 +93,8 @@ public:
 
 class DrawEntryImage : public DrawEntry {
 public:
-    Image* image;
+    Image* image = nullptr;
     Texture2D texture;
-    RenderTexture2D mask = {};
 
     std::string data = "";
     Vector2 image_size{0, 0};
@@ -109,7 +108,6 @@ public:
 
     void updateData();
     void resizeImage();
-    void updateRounding();
 };
 
 class DrawEntryCircle : public DrawEntry {
@@ -128,6 +126,7 @@ public:
     double thickness = 1;
     Rectangle rect{0, 0, 0, 0};
     bool filled = true;
+    double rounding = 0;
 
     DrawEntrySquare();
 };

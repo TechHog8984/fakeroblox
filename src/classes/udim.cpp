@@ -28,33 +28,23 @@ static int UDim_new(lua_State* L) {
 }
 
 bool lua_isudim(lua_State* L, int index) {
-    if (!lua_isuserdata(L, index))
-        return false;
-
-    if (!lua_getmetatable(L, index))
-        return false;
-
-    luaL_getmetatable(L, "UDim");
-    bool result = lua_equal(L, -2, -1);
-    lua_pop(L, 2);
-
-    return result;
+    return luaL_isudatareal(L, index, "UDim");
 }
 UDim* lua_checkudim(lua_State* L, int index) {
-    void* ud = luaL_checkudata(L, index, "UDim");
+    void* ud = luaL_checkudatareal(L, index, "UDim");
 
     return static_cast<UDim*>(ud);
 }
 
 static int UDim__tostring(lua_State* L) {
-    UDim* udim = static_cast<UDim*>(luaL_checkudata(L, 1, "UDim"));
+    UDim* udim = lua_checkudim(L, 1);
 
     lua_pushfstringL(L, "%.f, %.f", udim->scale, udim->offset);
     return 1;
 }
 
 static int UDim__index(lua_State* L) {
-    UDim* udim = static_cast<UDim*>(luaL_checkudata(L, 1, "UDim"));
+    UDim* udim = lua_checkudim(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     if (strequal(key, "Scale"))
@@ -70,8 +60,7 @@ static int UDim__index(lua_State* L) {
     luaL_error(L, "%s is not a valid member of UDim", key);
 }
 static int UDim__newindex(lua_State* L) {
-    // UDim* udim = static_cast<UDim*>(luaL_checkudata(L, 1, "UDim"));
-    luaL_checkudata(L, 1, "UDim");
+    lua_checkudim(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     if (strequal(key, "Scale") || strequal(key, "Offset"))
@@ -83,14 +72,14 @@ static int UDim__newindex(lua_State* L) {
 }
 
 static int UDim__add(lua_State* L) {
-    UDim* a = static_cast<UDim*>(luaL_checkudata(L, 1, "UDim"));
-    UDim* b = static_cast<UDim*>(luaL_checkudata(L, 2, "UDim"));
+    UDim* a = lua_checkudim(L, 1);
+    UDim* b = lua_checkudim(L, 2);
 
     return pushUDim(L, a->scale + b->scale, a->offset + b->offset);
 }
 static int UDim__sub(lua_State* L) {
-    UDim* a = static_cast<UDim*>(luaL_checkudata(L, 1, "UDim"));
-    UDim* b = static_cast<UDim*>(luaL_checkudata(L, 2, "UDim"));
+    UDim* a = lua_checkudim(L, 1);
+    UDim* b = lua_checkudim(L, 2);
 
     return pushUDim(L, a->scale - b->scale, a->offset - b->offset);
 }

@@ -103,12 +103,12 @@ static bool isStorageChild(std::shared_ptr<rbxInstance> instance) {
 }
 Vector2 Vector2Zero{0, 0};
 
-void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> instance, Vector2 mouse) {
+void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> instance, Vector2 mouse, bool anyImGui) {
     auto parent = getInstanceValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
     const bool is_storage_child = isStorageChild(parent);
 
-    // TODO: separate function for pos&size calculations that only get called on parent changed?
-    // above will be nice so a newly-created guiobject's Absolute* values aren't all zero until render
+    // FIXME: separate function for pos&size calculations that only get called on parent changed?
+    // necessary so a newly-created guiobject's Absolute* values are accurate before render
     auto parent_absolute_position = is_storage_child ? Vector2Zero : getInstanceValue<Vector2>(parent, "AbsolutePosition");
     auto parent_absolute_size = is_storage_child ? rbxCamera::screen_size : getInstanceValue<Vector2>(parent, "AbsoluteSize");
     auto parent_absolute_rotation = is_storage_child ? 0.0f : getInstanceValue<float>(parent, "AbsoluteRotation");
@@ -168,7 +168,7 @@ void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> instance, Vector
     }
 
     auto shape_lines = getRectangleLinesPro(shape_rect, shape_origin, absolute_rotation);
-    const bool is_mouse_over = CheckCollisionPointPoly(mouse, shape_lines.data(), shape_lines.size());
+    const bool is_mouse_over = !anyImGui && CheckCollisionPointPoly(mouse, shape_lines.data(), shape_lines.size());
 
     auto& mouse_over_state = mouse_over_map[instance.get()];
 
@@ -215,7 +215,7 @@ void fireMouseMovementSignal(lua_State* L, Vector2& mouse, std::shared_ptr<rbxIn
     lua_call(L, 3, 0);
 }
 
-void rbxInstance_BasePlayerGui_process(lua_State *L) {
+void rbxInstance_BasePlayerGui_process(lua_State *L, bool anyImGui) {
     next_clickable_instance.reset();
     next_gui_objects_hovered.clear();
 
@@ -238,7 +238,7 @@ void rbxInstance_BasePlayerGui_process(lua_State *L) {
 
     // render objects
     for (size_t i = 0; i < render_list.size(); i++)
-        renderGuiObject(L, render_list[i], mouse);
+        renderGuiObject(L, render_list[i], mouse, anyImGui);
 
     clickable_instance = next_clickable_instance;
     gui_objects_hovered = next_gui_objects_hovered;

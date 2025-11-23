@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cstring>
 
-#include "console.hpp"
 #include "lua.h"
 #include "lualib.h"
 
@@ -27,16 +26,16 @@ int pushColor(lua_State* L, Color color) {
 }
 
 static int Color3_new(lua_State* L) {
-    float r = luaL_optnumberrange(L, 1, 0, 1, "r");
-    float g = luaL_optnumberrange(L, 2, 0, 1, "g");
-    float b = luaL_optnumberrange(L, 3, 0, 1, "b");
+    const float r = luaL_optnumberrange(L, 1, 0, 1, "r");
+    const float g = luaL_optnumberrange(L, 2, 0, 1, "g");
+    const float b = luaL_optnumberrange(L, 3, 0, 1, "b");
 
     return pushColor(L, r * 255.f, g * 255.f, b * 255.f);
 }
 static int Color3_fromRGB(lua_State* L) {
-    float r = luaL_optnumberrange(L, 1, 0, 255, "r");
-    float g = luaL_optnumberrange(L, 2, 0, 255, "g");
-    float b = luaL_optnumberrange(L, 3, 0, 255, "b");
+    const float r = luaL_optnumberrange(L, 1, 0, 255, "r");
+    const float g = luaL_optnumberrange(L, 2, 0, 255, "g");
+    const float b = luaL_optnumberrange(L, 3, 0, 255, "b");
 
     return pushColor(L, r, g, b);
 }
@@ -44,9 +43,9 @@ static int Color3_fromHSV(lua_State* L) {
     // FIXME: this is more similar to the behavior on Roblox (in terms of erroring)
     // reflect in other areas (like Color3.fromRGB)
     // it's not 100% tho, so still figure that out too
-    float h = std::max(0.0, luaL_optnumber(L, 1, 0));
-    float s = std::max(0.0, luaL_optnumber(L, 2, 0));
-    float v = std::max(0.0, luaL_optnumber(L, 3, 0));
+    const float h = std::max(0.0, luaL_optnumber(L, 1, 0)) * 360.0;
+    const float s = std::max(0.0, luaL_optnumber(L, 2, 0));
+    const float v = std::max(0.0, luaL_optnumber(L, 3, 0));
 
     return pushColor(L, ColorFromHSV(h, s, v));
 }
@@ -66,21 +65,24 @@ static int Color3_fromHex(lua_State* L) {
     return pushColor(L, Color{ r, g, b, 255 });
 }
 
+bool lua_iscolor(lua_State* L, int index) {
+    return luaL_isudatareal(L, index, "Color3");
+}
 Color* lua_checkcolor(lua_State* L, int narg) {
-    void* ud = luaL_checkudata(L, narg, "Color3");
+    void* ud = luaL_checkudatareal(L, narg, "Color3");
 
     return static_cast<Color*>(ud);
 }
 
 static int Color3__tostring(lua_State* L) {
-    Color* color = static_cast<Color*>(luaL_checkudata(L, 1, "Color3"));
+    Color* color = lua_checkcolor(L, 1);
 
     lua_pushfstringL(L, "%i, %i, %i", color->r, color->g, color->b);
     return 1;
 }
 static int Color3__eq(lua_State* L) {
-    Color* a = static_cast<Color*>(luaL_checkudata(L, 1, "Color3"));
-    Color* b = static_cast<Color*>(luaL_checkudata(L, 2, "Color3"));
+    Color* a = lua_checkcolor(L, 1);
+    Color* b = lua_checkcolor(L, 2);
 
     lua_pushboolean(L, b->r == a->r && b->g == a->g && b->b == a->b);
     return 1;
@@ -108,7 +110,6 @@ namespace Color3_methods {
     static int toHex(lua_State* L) {
         Color* color = lua_checkcolor(L, 1);
 
-        // auto hex = ColorToInt(*color);
         unsigned int hex = (color->r << 16) | (color->g << 8) | color->b;
 
         lua_pushfstring(L, "%x", hex);
@@ -129,7 +130,7 @@ lua_CFunction getColor3Method(Color* entry, const char* key) {
 }
 
 static int Color3__index(lua_State* L) {
-    Color* color = static_cast<Color*>(luaL_checkudata(L, 1, "Color3"));
+    Color* color = lua_checkcolor(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     if (strlen(key) == 1) {
@@ -162,7 +163,7 @@ static int Color3__index(lua_State* L) {
     luaL_error(L, "%s is not a valid member of Color3", key);
 }
 static int Color3__newindex(lua_State* L) {
-    luaL_checkudata(L, 1, "Color3");
+    lua_checkcolor(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     if (strlen(key) == 1) {
@@ -185,7 +186,7 @@ static int Color3__newindex(lua_State* L) {
     return 0;
 }
 static int Color3__namecall(lua_State* L) {
-    Color* color = static_cast<Color*>(luaL_checkudata(L, 1, "Color3"));
+    Color* color = lua_checkcolor(L, 1);
     const char* namecall = lua_namecallatom(L, nullptr);
     if (!namecall)
         luaL_error(L, "no namecall method!");
@@ -201,7 +202,7 @@ void open_color3lib(lua_State *L) {
     // Color3
     lua_newtable(L);
 
-    // TODO: test Color3_from*; Hex most likely does not support the RBG shorthand
+    // FIXME: test Color3_from*; Hex most likely does not support the RBG shorthand
     setfunctionfield(L, Color3_new, "new", true);
     setfunctionfield(L, Color3_fromRGB, "fromRGB", true);
     setfunctionfield(L, Color3_fromHSV, "fromHSV", true);

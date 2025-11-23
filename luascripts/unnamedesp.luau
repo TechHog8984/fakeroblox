@@ -1229,8 +1229,7 @@ function CreateMenu(NewPosition) -- Create Menu
 			function CSlider:ShowValue(Bool)
 				self.ShowingValue = Bool;
 
-				-- TweenService:Create(Dummy, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Value = Bool and 0 or 1 }):Play();
-				Dummy.Value = Bool and 0 or 1
+				TweenService:Create(Dummy, TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), { Value = Bool and 0 or 1 }):Play();
 			end
 
 			Sliders[#Sliders + 1] = CSlider;

@@ -11,9 +11,15 @@
 #include <variant>
 #include <vector>
 
+#include "classes/colorsequence.hpp"
+#include "classes/numberrange.hpp"
+#include "classes/numbersequence.hpp"
+#include "classes/rect.hpp"
+#include "common.hpp"
 #include "raylib.h"
 
 #include "classes/roblox/datatypes/enum.hpp"
+#include "classes/tweeninfo.hpp"
 #include "classes/udim.hpp"
 #include "classes/udim2.hpp"
 
@@ -50,6 +56,7 @@ struct rbxMethod {
 };
 
 class rbxInstance;
+class rbxValue;
 
 class rbxClass {
 public:
@@ -68,7 +75,7 @@ public:
     std::map<std::string, std::shared_ptr<rbxProperty>> properties;
     std::map<std::string, rbxMethod> methods;
     std::vector<std::string> events;
-    std::function<void(lua_State* L, rbxInstance* instance)> constructor = nullptr;
+    std::function<void(lua_State* L, std::shared_ptr<rbxInstance> instance)> constructor = nullptr;
     std::function<void(rbxInstance*)> destructor = nullptr;
 
     void newMethod(const char* name, lua_CFunction func, lua_Continuation cont = nullptr) {
@@ -78,15 +85,16 @@ public:
         method.cont = cont;
         methods.try_emplace(name, method);
     }
-};
 
-class rbxProperty;
+    std::shared_ptr<rbxProperty> newInternalProperty(const char* name, TypeCategory type_category, rbxValue default_value);
+};
 
 struct rbxCallback {
     int index; // index in method lookup; -1 means empty (nil)
 };
 
 typedef std::variant<
+    std::monostate,
     bool,
     int32_t,
     int64_t,
@@ -98,13 +106,20 @@ typedef std::variant<
 
     // TODO: this should most likely be a weak_ptr
     std::shared_ptr<rbxInstance>,
-    EnumItemWrapper,
 
+    EnumItemWrapper,
     Color,
-    Vector2,
-    Vector3,
+    TweenInfo,
+    ColorSequenceKeypoint,
+    ColorSequence,
+    NumberRange,
+    NumberSequenceKeypoint,
+    NumberSequence,
+    Rect,
     UDim,
-    UDim2
+    UDim2,
+    Vector2,
+    Vector3
 > rbxValueVariant;
 
 class rbxValue {
@@ -114,8 +129,6 @@ public:
     // Alternatively, we could just give rbxValue its own tags field that initially copies its property.
     std::shared_ptr<rbxProperty> property;
 
-    // TODO: use monostate in the variant instead of is_nil?
-    bool is_nil;
     rbxValueVariant value;
 };
 
@@ -167,17 +180,39 @@ void setInstanceParent(lua_State* L, std::shared_ptr<rbxInstance> instance, std:
 
 bool isDescendantOf(std::shared_ptr<rbxInstance> other);
 
+class rbxProperty {
+public:
+    enum Tags : uint8_t {
+        Hidden = 1 << 0,
+        Deprecated = 1 << 1,
+        ReadOnly = 1 << 2,
+        WriteOnly = 1 << 3,
+        NotScriptable = 1 << 4
+    };
+    uint8_t tags = 0;
+    bool internal = false;
+
+    TypeCategory type_category;
+    rbxValue default_value;
+
+    std::optional<std::string> route = std::nullopt;
+};
+
+rbxValueVariant& getInstanceValueVariant(std::shared_ptr<rbxInstance> instance, const char* name);
+
 template<typename T>
-T& getInstanceValue(std::shared_ptr<rbxInstance> instance, std::string name) {
-    std::lock_guard lock(instance->values_mutex);
-    return std::get<T>(instance->values.at(name).value);
+T& getInstanceValue(std::shared_ptr<rbxInstance> instance, const char* name) {
+    return std::get<T>(getInstanceValueVariant(instance, name));
 }
 
+rbxValueVariant luaValueToValueVariant(lua_State* L, int idx, rbxValueVariant& reference);
+
 template<typename T>
-void setInstanceValue(std::shared_ptr<rbxInstance> instance, lua_State* L, std::string name, T value, bool dont_report_changed = false) {
+void setInstanceValue(std::shared_ptr<rbxInstance> instance, lua_State* L, const char* name, T value, bool dont_report_changed = false) {
     std::unique_lock lock(instance->values_mutex);
 
-    auto& variant = instance->values.at(name).value;
+    auto& rbxvalue = instance->values.at(name);
+    auto& variant = rbxvalue.value;
 
     if (std::holds_alternative<EnumItemWrapper>(variant)) {
         if constexpr (std::is_same_v<T, std::string>) {
@@ -199,26 +234,76 @@ void setInstanceValue(std::shared_ptr<rbxInstance> instance, lua_State* L, std::
             goto AFTER_SET;
         }
         throw std::runtime_error("unexpected type when setting Color value");
-    } else if (std::holds_alternative<Vector2>(variant)) {
-        if constexpr (std::is_same_v<T, Vector2>) {
-            auto& v = std::get<Vector2>(variant);
-            if (value.x == v.x && value.y == v.y)
+    } else if (std::holds_alternative<TweenInfo>(variant)) {
+        if constexpr (std::is_same_v<T, TweenInfo>) {
+            auto& v = std::get<TweenInfo>(variant);
+            if (value.easing_direction.name == v.easing_direction.name && value.time == v.time && value.delay_time == v.delay_time && value.repeat_count == v.repeat_count && value.easing_style.name == v.easing_style.name && value.reverses == v.reverses)
                 goto DUPLICATE;
             v = value;
 
             goto AFTER_SET;
         }
-        throw std::runtime_error("unexpected type when setting Vector2 value");
-    } else if (std::holds_alternative<Vector3>(variant)) {
-        if constexpr (std::is_same_v<T, Vector3>) {
-            auto& v = std::get<Vector3>(variant);
-            if (value.x == v.x && value.y == v.y && value.z == v.z)
+        throw std::runtime_error("unexpected type when setting TweenInfo value");
+    } else if (std::holds_alternative<ColorSequenceKeypoint>(variant)) {
+        if constexpr (std::is_same_v<T, ColorSequenceKeypoint>) {
+            auto& v = std::get<ColorSequenceKeypoint>(variant);
+            if (value.time == v.time && value.value.r == v.value.r && value.value.g == v.value.g && value.value.b == v.value.b)
                 goto DUPLICATE;
             v = value;
 
             goto AFTER_SET;
         }
-        throw std::runtime_error("unexpected type when setting Vector3 value");
+        throw std::runtime_error("unexpected type when setting ColorSequenceKeypoint value");
+    } else if (std::holds_alternative<ColorSequence>(variant)) {
+        if constexpr (std::is_same_v<T, ColorSequence>) {
+            auto& v = std::get<ColorSequence>(variant);
+            // FIXME: colorsequence equality
+            v = value;
+
+            goto AFTER_SET;
+        }
+        throw std::runtime_error("unexpected type when setting ColorSequence value");
+    } else if (std::holds_alternative<NumberRange>(variant)) {
+        if constexpr (std::is_same_v<T, NumberRange>) {
+            auto& v = std::get<NumberRange>(variant);
+            if (value.min == v.min && value.max == v.max)
+                goto DUPLICATE;
+            v = value;
+
+            goto AFTER_SET;
+        }
+        throw std::runtime_error("unexpected type when setting NumberRange value");
+    } else if (std::holds_alternative<NumberSequenceKeypoint>(variant)) {
+        if constexpr (std::is_same_v<T, NumberSequenceKeypoint>) {
+            auto& v = std::get<NumberSequenceKeypoint>(variant);
+            if (value.envelope == v.envelope && value.time == v.time && value.value == v.value)
+                goto DUPLICATE;
+            v = value;
+
+            goto AFTER_SET;
+        }
+        throw std::runtime_error("unexpected type when setting NumberSequenceKeypoint value");
+    } else if (std::holds_alternative<NumberSequence>(variant)) {
+        if constexpr (std::is_same_v<T, NumberSequence>) {
+            auto& v = std::get<NumberSequence>(variant);
+            // FIXME: numbersequence equality
+            // if (value.envelope == v.envelope && value.time == v.time && value.value == v.value)
+            //     goto DUPLICATE;
+            v = value;
+
+            goto AFTER_SET;
+        }
+        throw std::runtime_error("unexpected type when setting NumberSequence value");
+    } else if (std::holds_alternative<Rect>(variant)) {
+        if constexpr (std::is_same_v<T, Rect>) {
+            auto& v = std::get<Rect>(variant);
+            if (value.minx == v.minx && value.miny == v.miny && value.maxx == v.maxx && value.maxy == v.maxy)
+                goto DUPLICATE;
+            v = value;
+
+            goto AFTER_SET;
+        }
+        throw std::runtime_error("unexpected type when setting Rect value");
     } else if (std::holds_alternative<UDim>(variant)) {
         if constexpr (std::is_same_v<T, UDim>) {
             auto& v = std::get<UDim>(variant);
@@ -239,6 +324,26 @@ void setInstanceValue(std::shared_ptr<rbxInstance> instance, lua_State* L, std::
             goto AFTER_SET;
         }
         throw std::runtime_error("unexpected type when setting UDim2 value");
+    } else if (std::holds_alternative<Vector2>(variant)) {
+        if constexpr (std::is_same_v<T, Vector2>) {
+            auto& v = std::get<Vector2>(variant);
+            if (value.x == v.x && value.y == v.y)
+                goto DUPLICATE;
+            v = value;
+
+            goto AFTER_SET;
+        }
+        throw std::runtime_error("unexpected type when setting Vector2 value");
+    } else if (std::holds_alternative<Vector3>(variant)) {
+        if constexpr (std::is_same_v<T, Vector3>) {
+            auto& v = std::get<Vector3>(variant);
+            if (value.x == v.x && value.y == v.y && value.z == v.z)
+                goto DUPLICATE;
+            v = value;
+
+            goto AFTER_SET;
+        }
+        throw std::runtime_error("unexpected type when setting Vector3 value");
     } else if (std::holds_alternative<std::shared_ptr<rbxInstance>>(variant)) {
         if constexpr (std::is_same_v<T, std::shared_ptr<rbxInstance>>) {
             auto& v = std::get<std::shared_ptr<rbxInstance>>(variant);
@@ -246,7 +351,7 @@ void setInstanceValue(std::shared_ptr<rbxInstance> instance, lua_State* L, std::
             if (value == v)
                 goto DUPLICATE;
 
-            if (name == PROP_INSTANCE_PARENT) {
+            if (strequal(name, PROP_INSTANCE_PARENT)) {
                 lock.unlock();
                 setInstanceParent(L, instance, value, false, true);
                 lock.lock();
@@ -264,9 +369,8 @@ void setInstanceValue(std::shared_ptr<rbxInstance> instance, lua_State* L, std::
             if constexpr (std::is_same_v<T, type>) {                                       \
                 if (value == std::get<type>(variant))                                      \
                     goto DUPLICATE;                                                        \
-            } else {                                                                       \
+            } else                                                                         \
                 throw std::runtime_error("unexpected type when setting " #type " value");  \
-            }                                                                              \
         }                                                                                  \
     }
 
@@ -277,36 +381,25 @@ void setInstanceValue(std::shared_ptr<rbxInstance> instance, lua_State* L, std::
     handleType(double)
     handleType(std::string)
 
+    #undef handleType
+
     std::get<T>(variant) = value;
 
+    // TODO: why are these gotos here? (this one and the below DUPLICATE)
     goto AFTER_SET;
     AFTER_SET: ;
 
     lock.unlock();
 
-    if (!dont_report_changed)
-        instance->reportChanged(L, name.c_str());
+    if (!rbxvalue.property->internal && !dont_report_changed)
+        instance->reportChanged(L, name);
 
     goto DUPLICATE;
     DUPLICATE: ;
 }
 
-class rbxProperty {
-public:
-    enum Tags : uint8_t {
-        Hidden = 1 << 0,
-        Deprecated = 1 << 1,
-        ReadOnly = 1 << 2,
-        WriteOnly = 1 << 3,
-        NotScriptable = 1 << 4
-    };
-    uint8_t tags = 0;
+void setInstanceValueVariant(std::shared_ptr<rbxInstance> instance, lua_State* L, const char* name, rbxValueVariant value, bool dont_report_changed = false);
 
-    TypeCategory type_category;
-    rbxValue default_value;
-
-    std::optional<std::string> route = std::nullopt;
-};
 
 std::shared_ptr<rbxInstance>& lua_checkinstance(lua_State* L, int narg, const char* class_name = nullptr);
 std::shared_ptr<rbxInstance> lua_optinstance(lua_State* L, int narg, const char* class_name = nullptr);

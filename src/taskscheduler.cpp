@@ -323,8 +323,8 @@ void TaskScheduler::resumeThread(lua_State* thread) {
 void TaskScheduler::run() {
     std::shared_lock task_queue_lock(thread_queue_mutex);
 
-    std::vector<lua_State*> filtered_threads;
-    filtered_threads.reserve(thread_queue.size());
+    static std::vector<lua_State*> filtered_threads;
+    filtered_threads.clear();
 
     for (size_t i = 0; i < thread_queue.size(); i++) {
         lua_State* thread = thread_queue[i];

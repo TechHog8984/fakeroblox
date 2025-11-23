@@ -22,11 +22,19 @@ namespace fakeroblox {
 
 #define luaL_optnumberloose(L, narg, def) (luaL_opt(L, lua_tonumber, narg, def))
 
-#define LUA_TAG_SHAREDPTR_OBJECT 1
-#define LUA_TAG_ENUM 2
-#define LUA_TAG_ENUMITEM 3
+enum LuaTag {
+    LUA_TAG_SHAREDPTR_OBJECT = 1,
+    LUA_TAG_ENUM,
+    LUA_TAG_ENUMITEM,
+    LUA_TAG_TWEENINFO,
+    LUA_TAG_NUMBER_SEQUENCE,
+    LUA_TAG_COLOR_SEQUENCE,
+};
 
 extern bool print_stdout;
+
+int countDecimals(double value);
+#define decimalFmt(value) countDecimals(value), value
 
 #define SHAREDPTR_TAG_COUNT 2
 using Destructor = std::function<void(void*)>;
@@ -44,12 +52,16 @@ using OnKill = std::function<void()>;
 
 std::string fixString(std::string_view original);
 
-std::string safetostringobj(lua_State* L, const TValue* obj, bool use_fixstring = false);
-std::string safetostring(lua_State* L, int index);
+std::string rawtostringobj(lua_State* L, const TValue* obj, bool use_fixstring = false);
+std::string rawtostring(lua_State* L, int index);
 
 double luaL_checknumberrange(lua_State* L, int narg, double min, double max, const char* context);
 double luaL_optnumberrange(lua_State* L, int narg, double min, double max, const char* context, double def = 0);
 
+bool luaL_isudatareal(lua_State* L, int ud, const char* tname);
+void* luaL_checkudatareal(lua_State* L, int ud, const char* tname);
+
+int createweaktable(lua_State* L, int narr, int nrec);
 int newweaktable(lua_State* L);
 
 int pushFromLookup(lua_State* L, const char* lookup, std::function<void()> pushKey, std::function<void()> pushValue);

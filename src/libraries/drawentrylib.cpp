@@ -1,6 +1,7 @@
 #include "libraries/drawentrylib.hpp"
 #include "basedrawing.hpp"
 #include "classes/color3.hpp"
+#include "classes/roblox/camera.hpp"
 #include "classes/vector2.hpp"
 #include "common.hpp"
 
@@ -11,6 +12,7 @@
 #include "lualib.h"
 
 #include <mutex>
+#include <raylib.h>
 #include <shared_mutex>
 
 namespace fakeroblox {
@@ -28,13 +30,18 @@ void sortDrawList() {
 }
 
 DrawEntry::DrawEntry(Type type, const char* class_name) : type(type), class_name(class_name) {}
-DrawEntryLine::DrawEntryLine() : DrawEntry(DrawEntry::DrawTypeLine, "Line") {}
-DrawEntryText::DrawEntryText() : DrawEntry(DrawEntry::DrawTypeText, "Text") {}
-DrawEntryImage::DrawEntryImage() : DrawEntry(DrawEntry::DrawTypeImage, "Image") {}
-DrawEntryCircle::DrawEntryCircle() : DrawEntry(DrawEntry::DrawTypeCircle, "Circle") {}
-DrawEntrySquare::DrawEntrySquare() : DrawEntry(DrawEntry::DrawTypeSquare, "Square") {}
-DrawEntryTriangle::DrawEntryTriangle() : DrawEntry(DrawEntry::DrawTypeTriangle, "Triangle") {}
-DrawEntryQuad::DrawEntryQuad() : DrawEntry(DrawEntry::DrawTypeQuad, "Quad") {}
+
+#define drawEntryConstructor(type) DrawEntry##type::DrawEntry##type() : DrawEntry(DrawEntry::DrawType##type, #type) {}
+
+drawEntryConstructor(Line)
+drawEntryConstructor(Text)
+drawEntryConstructor(Image)
+drawEntryConstructor(Circle)
+drawEntryConstructor(Square)
+drawEntryConstructor(Triangle)
+drawEntryConstructor(Quad)
+
+#undef drawEntryConstructor
 
 size_t DrawEntryText::default_font = FontDefault;
 void DrawEntryText::updateTextBounds() {
@@ -64,18 +71,27 @@ void DrawEntryText::updateOutline() {
 }
 
 DrawEntryImage::~DrawEntryImage() {
-    UnloadTexture(texture);
+    if (IsTextureValid(texture))
+        UnloadTexture(texture);
+    if (image) {
+        UnloadImage(*image);
+        delete image;
+    }
 }
 void DrawEntryImage::updateData() {
     unsigned char* data_ptr = reinterpret_cast<unsigned char*>(data.data());
     int data_size = data.size();
 
-    image = ImageLoader::getImage(data_ptr, data_size);
+    // clone so ImageResize only affects this image
+    image = cloneImage(ImageLoader::getImage(data_ptr, data_size));
     texture = LoadTextureFromImage(*image);
     // TODO: istexturevalid here?
 
     image_size.x = texture.width;
     image_size.y = texture.height;
+
+    if (size.x == 0 && size.y == 0)
+        size = image_size;
 
     resizeImage();
 }
@@ -84,25 +100,9 @@ void DrawEntryImage::resizeImage() {
         return;
 
     UnloadTexture(texture);
-    UnloadRenderTexture(mask);
-    // FIXME: this affects the cached image, meaning two drawings with the same data will both be resized
     ImageResize(image, size.x, size.y);
 
     texture = LoadTextureFromImage(*image);
-    mask = LoadRenderTexture(size.x, size.y);
-
-    updateRounding();
-}
-void DrawEntryImage::updateRounding() {
-    if (mask.id <= 0)
-        return;
-
-    BeginTextureMode(mask);
-    ClearBackground(BLANK);
-
-    DrawCircle(0, 0, rounding, WHITE);
-    // DrawRectangleRounded((Rectangle){0, 0, size.x, size.y}, rounding, 16, WHITE);
-    EndTextureMode();
 }
 
 void DrawEntry::onZIndexUpdate() {
@@ -207,8 +207,9 @@ static int DrawEntry_new(lua_State* L) {
 }
 
 DrawEntry* lua_checkdrawentry(lua_State* L, int index) {
-    DrawEntry* obj = static_cast<DrawEntry*>(luaL_checkudata(L, index, "DrawEntry"));
-    return obj;
+    void* ud = luaL_checkudatareal(L, index, "DrawEntry");
+
+    return static_cast<DrawEntry*>(ud);
 }
 
 DrawEntry* DrawEntry::clone(lua_State* L) {
@@ -272,6 +273,7 @@ DrawEntry* DrawEntry::clone(lua_State* L) {
             entry_square->thickness = this_square->thickness;
             entry_square->rect = this_square->rect;
             entry_square->filled = this_square->filled;
+            entry_square->rounding = this_square->rounding;
 
             break;
         }
@@ -490,6 +492,8 @@ int DrawEntry__index(lua_State* L) {
                     pushVector2(L, rect.x, rect.y);
                 } else if (strequal(key, "Filled"))
                     lua_pushboolean(L, entry_square->filled);
+                else if (strequal(key, "Rounding"))
+                    lua_pushnumber(L, entry_square->rounding);
                 else
                     goto INVALID;
 
@@ -643,10 +647,9 @@ int DrawEntry__newindex(lua_State* L) {
                     entry_image->resizeImage();
                 } else if (strequal(key, "Position"))
                     entry_image->position = *lua_checkvector2(L, 3);
-                else if (strequal(key, "Rounding")) {
+                else if (strequal(key, "Rounding"))
                     entry_image->rounding = luaL_checknumber(L, 3);
-                    entry_image->updateRounding();
-                } else
+                else
                     goto INVALID;
 
                 break;
@@ -682,6 +685,8 @@ int DrawEntry__newindex(lua_State* L) {
                     entry_square->rect.y = vector->y;
                 } else if (strequal(key, "Filled"))
                     entry_square->filled = luaL_checkboolean(L, 3);
+                else if (strequal(key, "Rounding"))
+                    entry_square->rounding = luaL_checknumber(L, 3);
                 else
                     goto INVALID;
 
@@ -830,10 +835,27 @@ void DrawEntry::render() {
             }
             case DrawTypeImage: {
                 DrawEntryImage* entry_image = static_cast<DrawEntryImage*>(entry);
-                // BeginBlendMode(BLEND_SUBTRACT_COLORS);
-                DrawTexture(entry_image->texture, entry_image->position.x, entry_image->position.y, color);
-                // DrawTexture(entry_image->mask.texture, entry_image->position.x, entry_image->position.y, color);
-                // EndBlendMode();
+
+                const float rounding = entry_image->rounding;
+
+                if (rounding > 0) {
+                    float recx = entry_image->position.x;
+                    float recy = entry_image->position.y;
+                    float recw = entry_image->image_size.x;
+                    float rech = entry_image->image_size.y;
+                    SetShaderValue(round_shader, GetShaderLocation(round_shader, "rectangle"), (float[]){ recx, rbxCamera::screen_size.y - recy - rech, recw, rech }, SHADER_UNIFORM_VEC4);
+
+                    SetShaderValue(round_shader, GetShaderLocation(round_shader, "radius"), (float[]){ rounding, rounding, rounding, rounding }, SHADER_UNIFORM_VEC4);
+
+                    SetShaderValue(round_shader, GetShaderLocation(round_shader, "color"), (float[]) { color.r / 255.0f, color.g / 255.0f, color.b / 255.0f, color.a / 255.0f }, SHADER_UNIFORM_VEC4);
+                    SetShaderValue(round_shader, GetShaderLocation(round_shader, "shadowColor"), (float[]) { 0.0f, 0.0f, 0.0f, 0.0f }, SHADER_UNIFORM_VEC4);
+                    SetShaderValue(round_shader, GetShaderLocation(round_shader, "borderColor"), (float[]) { 0.0f, 0.0f, 0.0f, 0.0f }, SHADER_UNIFORM_VEC4);
+
+                    BeginShaderMode(round_shader);
+                        DrawTexture(entry_image->texture, recx, recy, WHITE);
+                    EndShaderMode();
+                } else
+                    DrawTexture(entry_image->texture, entry_image->position.x, entry_image->position.y, WHITE);
 
                 break;
             }
@@ -844,7 +866,7 @@ void DrawEntry::render() {
             }
             case DrawTypeSquare: {
                 DrawEntrySquare* entry_square = static_cast<DrawEntrySquare*>(entry);
-                drawingDrawRectangle(&entry_square->rect, &color, 0, entry_square->thickness, entry_square->filled);
+                drawingDrawRectangle(&entry_square->rect, &color, entry_square->rounding / 500.f, entry_square->thickness, entry_square->filled);
                 break;
             }
             case DrawTypeTriangle: {

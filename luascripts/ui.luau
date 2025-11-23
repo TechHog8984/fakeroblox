@@ -1,8 +1,12 @@
 local coregui = game:GetService("CoreGui")
 -- local coregui = gethui()
-coregui:ClearAllChildren()
+do
+local old = coregui:FindFirstChild("gui")
+if old then old:Destroy() end
+end
 
 local gui = Instance.new("ScreenGui")
+gui.Name = "gui"
 gui.Parent = coregui
 
 local main_frame = Instance.new("Frame")

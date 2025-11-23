@@ -31,7 +31,7 @@ int pushNewRBXScriptSignal(lua_State* L, std::string name) {
 }
 
 rbxScriptSignal* lua_checkrbxscriptsignal(lua_State* L, int narg) {
-    void* ud = luaL_checkudata(L, narg, "RBXScriptSignal");
+    void* ud = luaL_checkudatareal(L, narg, "RBXScriptSignal");
 
     return static_cast<rbxScriptSignal*>(ud);
 }

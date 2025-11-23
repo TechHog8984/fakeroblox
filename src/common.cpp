@@ -1,5 +1,6 @@
 #include "common.hpp"
 #include "console.hpp"
+#include "ludata.h"
 #include "taskscheduler.hpp"
 
 #include "classes/roblox/instance.hpp"
@@ -17,6 +18,22 @@
 namespace fakeroblox {
 
 bool print_stdout = false;
+
+int countDecimals(double value) {
+    double intpart;
+    double frac = modf(value, &intpart);
+
+    if (frac == 0.0)
+        return 0;
+
+    for (int i = 1; i <= 10; ++i) {
+        double scaled = round(frac * pow(10, i)) / pow(10, i);
+        if (fabs(value - (intpart + scaled)) < 1e-10)
+            return i;
+    }
+
+    return 10;
+}
 
 std::map<size_t, Destructor> sharedptr_destructor_list;
 std::map<void*, size_t> object_destructor_map;
@@ -92,7 +109,7 @@ std::string fixString(std::string_view original) {
 };
 
 // from Luau/VM/src/laux.cpp
-std::string safetostringobj(lua_State* L, const TValue* obj, bool use_fixstring) {
+std::string rawtostringobj(lua_State* L, const TValue* obj, bool use_fixstring) {
     std::string str;
     switch (obj->tt) {
         case LUA_TNIL:
@@ -141,8 +158,8 @@ std::string safetostringobj(lua_State* L, const TValue* obj, bool use_fixstring)
     }
     return str;
 }
-std::string safetostring(lua_State* L, int index) {
-    return safetostringobj(L, luaA_toobject(L, index));
+std::string rawtostring(lua_State* L, int index) {
+    return rawtostringobj(L, luaA_toobject(L, index));
 }
 
 double luaL_checknumberrange(lua_State* L, int narg, double min, double max, const char* context) {
@@ -159,8 +176,51 @@ double luaL_optnumberrange(lua_State* L, int narg, double min, double max, const
     return n;
 }
 
-int newweaktable(lua_State* L) {
-    lua_newtable(L);
+// from Luau/VM/src/laux.cpp
+bool getUdataReal(lua_State* L, void*& out, int ud, const char* tname) {
+    const TValue* o = luaA_toobject(L, ud);
+    if (ttype(o) != LUA_TUSERDATA || uvalue(o)->tag == UTAG_PROXY)
+        return false;
+
+    if (!lua_getmetatable(L, ud))
+        return false;
+
+    lua_getfield(L, LUA_REGISTRYINDEX, tname);
+    if (!lua_rawequal(L, -1, -2))
+        return false;
+
+    lua_pop(L, 2); // remove both metatables
+    out = uvalue(o)->data;
+    return true;
+}
+
+bool luaL_isudatareal(lua_State* L, int ud, const char* tname) {
+    int top = lua_gettop(L);
+    void* result;
+    if (!getUdataReal(L, result, ud, tname))
+        return false;
+
+    const int items = lua_gettop(L) - top;
+    if (items)
+        lua_pop(L, items);
+
+    return true;
+}
+void* luaL_checkudatareal(lua_State* L, int ud, const char* tname) {
+    int top = lua_gettop(L);
+    void* result;
+    if (!getUdataReal(L, result, ud, tname))
+        luaL_typeerrorL(L, ud, tname);
+
+    const int items = lua_gettop(L) - top;
+    if (items)
+        lua_pop(L, items);
+
+    return result;
+}
+
+int createweaktable(lua_State* L, int narr, int nrec) {
+    lua_createtable(L, narr, nrec);
     lua_pushvalue(L, -1);
     lua_setmetatable(L, -2);
     lua_pushstring(L, "kvs");
@@ -168,7 +228,10 @@ int newweaktable(lua_State* L) {
 
     return 1;
 }
-// TODO: only call pushKey once (use pushvalue)
+int newweaktable(lua_State* L) {
+    return createweaktable(L, 0, 0);
+}
+// TODO: only call pushKey once (use lua_pushvalue)
 int pushFromLookup(lua_State* L, const char* lookup, std::function<void()> pushKey, std::function<void()> pushValue) {
     lua_getfield(L, LUA_REGISTRYINDEX, lookup);
     pushKey();

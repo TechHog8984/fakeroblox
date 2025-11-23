@@ -194,7 +194,7 @@ void UI_FunctionExplorer_render(lua_State *L) {
                         break;
                     }
                     default: {
-                        std::string str = safetostringobj(L, k, true);
+                        std::string str = rawtostringobj(L, k, true);
                         static const char* fmt = "%.*s";
                         size_t size = snprintf(NULL, 0, fmt, static_cast<int>(str.size()), str.c_str());
                         if (size > msg_size) {

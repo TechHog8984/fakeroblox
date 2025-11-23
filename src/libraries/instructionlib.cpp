@@ -40,8 +40,7 @@ struct InstructionWrapper {
 void stephook(lua_State* L, lua_Debug* ar);
 
 InstructionWrapper* lua_checkinstruction(lua_State* L, int arg) {
-    luaL_checkany(L, arg);
-    void* ud = luaL_checkudata(L, arg, "InstructionWrapper");
+    void* ud = luaL_checkudatareal(L, arg, "InstructionWrapper");
 
     return static_cast<InstructionWrapper*>(ud);
 }

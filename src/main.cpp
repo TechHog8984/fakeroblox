@@ -1,14 +1,23 @@
 #include <cfloat>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <shared_mutex>
 #include <stdexcept>
 
+#include "basedrawing.hpp"
+#include "classes/colorsequence.hpp"
+#include "classes/colorsequencekeypoint.hpp"
+#include "classes/numberrange.hpp"
+#include "classes/numbersequence.hpp"
+#include "classes/numbersequencekeypoint.hpp"
+#include "classes/rect.hpp"
 #include "common.hpp"
 #include "curl/curl.h"
 #include "libraries/cryptlib.hpp"
 #include "libraries/drawingimmediate.hpp"
+#include "libraries/filesystemlib.hpp"
 #include "raylib.h"
 #include "rlImGui.h"
 #include "imgui.h"
@@ -35,15 +44,17 @@
 #include "libraries/instructionlib.hpp"
 
 #include "classes/color3.hpp"
-#include "classes/vector2.hpp"
-#include "classes/vector3.hpp"
+#include "classes/tweeninfo.hpp"
 #include "classes/udim.hpp"
 #include "classes/udim2.hpp"
+#include "classes/vector2.hpp"
+#include "classes/vector3.hpp"
 #include "classes/roblox/baseplayergui.hpp"
 #include "classes/roblox/camera.hpp"
 #include "classes/roblox/datamodel.hpp"
 #include "classes/roblox/runservice.hpp"
 #include "classes/roblox/userinputservice.hpp"
+#include "classes/roblox/tweenservice.hpp"
 #include "classes/roblox/workspace.hpp"
 #include "classes/roblox/custom/imguiservice.hpp"
 
@@ -126,6 +137,8 @@ void tryRunCode(lua_State* L, const char* name, const char* code, size_t code_le
     }
 }
 
+Shader fakeroblox::round_shader;
+
 int main(int argc, char** argv) {
     if (argc < 1) {
         displayHelp();
@@ -143,6 +156,30 @@ int main(int argc, char** argv) {
             fprintf(stderr, "ERROR: unrecognized option '%s'\n", arg);
             return 1;
         }
+    }
+
+    {
+    const char* user_home = getenv("HOME");
+    if (user_home == NULL) {
+        fprintf(stderr, "ERROR: failed to get HOME environment variable");
+        return 1;
+    }
+
+    FileSystem::home_path = std::string(user_home);
+    FileSystem::home_path.append("/fakeroblox/");
+
+    FileSystem::workspace_path.assign(FileSystem::home_path);
+    FileSystem::workspace_path.append("workspace/");
+
+    if (!std::filesystem::exists(FileSystem::home_path) && !std::filesystem::create_directory(FileSystem::home_path)) {
+        fprintf(stderr, "ERROR: failed to create folder at $HOME/fakeroblox");
+        return 1;
+    }
+    if (!std::filesystem::exists(FileSystem::workspace_path) && !std::filesystem::create_directory(FileSystem::workspace_path)) {
+        fprintf(stderr, "ERROR: failed to create folder at $HOME/fakeroblox/workspace");
+        return 1;
+    }
+
     }
 
     std::string api_dump;
@@ -164,12 +201,20 @@ int main(int argc, char** argv) {
 
     open_fakeroblox_environment(L);
 
-    open_tasklib(L);
-    open_vector2lib(L);
-    open_vector3lib(L);
+    open_filesystemlib(L);
     open_color3lib(L);
+    open_tasklib(L);
+    open_tweeninfolib(L);
+    open_colorsequencekeypointlib(L);
+    open_colorsequencelib(L);
+    open_numberrangelib(L);
+    open_numbersequencekeypointlib(L);
+    open_numbersequencelib(L);
+    open_rectlib(L);
     open_udimlib(L);
     open_udim2lib(L);
+    open_vector2lib(L);
+    open_vector3lib(L);
 
     initializeSharedPtrDestructorList();
 
@@ -238,8 +283,8 @@ int main(int argc, char** argv) {
         getTask(fontL)->identifier.assign(buf);
     }
 
-    static lua_State* dont_kill_thread_list[4] = { appL, userL, testL, fontL };
-    static lua_State** dont_kill_thread_list_end = dont_kill_thread_list + IM_ARRAYSIZE(dont_kill_thread_list);
+    lua_State* dont_kill_thread_list[4] = { appL, userL, testL, fontL };
+    lua_State** dont_kill_thread_list_end = dont_kill_thread_list + IM_ARRAYSIZE(dont_kill_thread_list);
 
     // window items
     bool show_fps = false;
@@ -254,6 +299,7 @@ int main(int argc, char** argv) {
     // debugging items
     bool enable_user_input_service = true;
     bool enable_run_service = true;
+    bool enable_tween_service = true;
     bool menu_image_explorer_open = false;
     bool menu_table_explorer_open = false;
 
@@ -266,13 +312,27 @@ int main(int argc, char** argv) {
 
     pushNewScriptEditorTab();
 
+    round_shader = LoadShader("assets/base.vs", "assets/rounded_rectangle.fs");
+    float shader_zero = 0.f;
+
+    {
+        SetShaderValue(round_shader, GetShaderLocation(round_shader, "radius"), (float[]){ 5.f, 5.f, 5.f, 5.f }, SHADER_UNIFORM_VEC4);
+        SetShaderValue(round_shader, GetShaderLocation(round_shader, "shadowRadius"), &shader_zero, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(round_shader, GetShaderLocation(round_shader, "shadowOffset"), (float[]){ 0.f, 0.f }, SHADER_UNIFORM_VEC2);
+        SetShaderValue(round_shader, GetShaderLocation(round_shader, "shadowScale"), &shader_zero, SHADER_UNIFORM_FLOAT);
+        SetShaderValue(round_shader, GetShaderLocation(round_shader, "borderThickness"), &shader_zero, SHADER_UNIFORM_FLOAT);
+    }
+
     rlImGuiSetup(true);
     const double initial_game_time = lua_clock();
     while (!WindowShouldClose() && !DataModel::shutdown) {
+        const bool anyImGui = ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow);
         if (enable_user_input_service)
-            UserInputService::process(appL);
+            UserInputService::process(appL, anyImGui);
         if (enable_run_service)
             RunService::process(appL);
+        if (enable_tween_service)
+            TweenService::process(appL);
 
         TaskScheduler::run();
 
@@ -288,7 +348,7 @@ int main(int argc, char** argv) {
         ClearBackground(DARKGRAY);
 
         // gui object
-        rbxInstance_BasePlayerGui_process(appL);
+        rbxInstance_BasePlayerGui_process(appL, anyImGui);
 
         // lua drawings
         DrawEntry::render();
@@ -328,6 +388,7 @@ int main(int argc, char** argv) {
             if (ImGui::BeginMenu("Debugging")) {
                 ImGui::MenuItem("Enable UserInputService", nullptr, &enable_user_input_service);
                 ImGui::MenuItem("Enable RunService", nullptr, &enable_run_service);
+                ImGui::MenuItem("Enable TweenService", nullptr, &enable_tween_service);
                 ImGui::MenuItem("Function Explorer", nullptr, &menu_function_explorer_open);
                 ImGui::MenuItem("Table Explorer", nullptr, &menu_table_explorer_open);
                 ImGui::MenuItem("Image Explorer", nullptr, &menu_image_explorer_open);
@@ -359,6 +420,8 @@ int main(int argc, char** argv) {
                     config.path = ".";
                     ImGuiFileDialog::Instance()->OpenDialog("scripteditorsave", "Save File", ".*", config); 
                 }
+
+                ImGui::Separator();
 
                 if (ImGuiFileDialog::Instance()->Display("scripteditoropen", ImGuiWindowFlags_NoCollapse, ImVec2{0, 250})) {
                     if (ImGuiFileDialog::Instance()->IsOk())
@@ -640,6 +703,8 @@ int main(int argc, char** argv) {
     }
     DataModel::onShutdown(appL);
 
+    UnloadShader(round_shader);
+
     for (auto& entry : DrawEntry::draw_list)
         entry->free();
 
@@ -649,13 +714,13 @@ int main(int argc, char** argv) {
     ImageLoader::unload();
     CloseWindow();
 
-    TaskScheduler::killThread(appL);
-    TaskScheduler::killThread(userL);
-    TaskScheduler::killThread(testL);
-    TaskScheduler::killThread(fontL);
-
-    TaskScheduler::cleanup();
     rbxInstanceCleanup(appL);
+
+    for (int i = 0; i < IM_ARRAYSIZE(dont_kill_thread_list); i++)
+        TaskScheduler::killThread(dont_kill_thread_list[i]);
+
+    // probably redundant?
+    TaskScheduler::cleanup();
 
     lua_close(L);
 

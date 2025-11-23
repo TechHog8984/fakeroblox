@@ -18,7 +18,7 @@ public:
     static Vector2 mouse_position;
 
     static void signalMouseMovement(std::shared_ptr<rbxInstance> instance, InputState type);
-    static void process(lua_State* L);
+    static void process(lua_State* L, bool anyImGui);
 };
 
 void rbxInstance_UserInputService_init();

@@ -32,7 +32,7 @@ static int Vector2_new(lua_State* L) {
 }
 
 Vector2* lua_checkvector2(lua_State* L, int narg) {
-    void* ud = luaL_checkudata(L, narg, "Vector2");
+    void* ud = luaL_checkudatareal(L, narg, "Vector2");
 
     return static_cast<Vector2*>(ud);
 }
@@ -80,8 +80,7 @@ static int Vector2__index(lua_State* L) {
 #undef MAGNITUDE
 
 static int Vector2__newindex(lua_State* L) {
-    // Vector2* vector2 = lua_checkvector2(L, 1);
-    luaL_checkudata(L, 1, "Vector2");
+    lua_checkvector2(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     if (strlen(key) == 1) {
@@ -102,8 +101,7 @@ static int Vector2__newindex(lua_State* L) {
     return 0;
 }
 static int Vector2__namecall(lua_State* L) {
-    // Vector2* vector2 = lua_checkvector2(L, 1);
-    luaL_checkudata(L, 1, "Vector2");
+    lua_checkvector2(L, 1);
     const char* namecall = lua_namecallatom(L, nullptr);
     if (!namecall)
         luaL_error(L, "no namecall method!");

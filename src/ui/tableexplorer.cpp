@@ -117,7 +117,7 @@ void UI_TableExplorer_render(lua_State *L) {
         for (int i = 0; i < selected_table->sizearray; i++) {
             auto obj = &selected_table->array[i];
             if (!ttisnil(obj)) {
-                std::string str = safetostringobj(L, obj, true);
+                std::string str = rawtostringobj(L, obj, true);
 
                 ImGui::Text("%d =", i + 1);
 
@@ -155,8 +155,8 @@ void UI_TableExplorer_render(lua_State *L) {
             auto obj = gval(gnode(selected_table, i));
             if (!ttisnil(obj)) {
                 getnodekey(L, key, gnode(selected_table, i));
-                std::string key_str = safetostringobj(L, key, true);
-                std::string value_str = safetostringobj(L, obj, true);
+                std::string key_str = rawtostringobj(L, key, true);
+                std::string value_str = rawtostringobj(L, obj, true);
 
                 static const char* fmt_left = "[%.*s] =";
                 size_t size_left = snprintf(NULL, 0, fmt_left, static_cast<int>(key_str.size()), key_str.c_str());

@@ -5,9 +5,16 @@ namespace fakeroblox {
 std::map<rbxInstance*, bool> auto_button_color_map;
 
 void rbxInstance_GuiButton_init() {
-    rbxClass::class_map["GuiButton"]->constructor = [](lua_State* L, rbxInstance* instance) {
-        std::get<bool>(instance->values["AutoButtonColor"].value) = true;
+    auto& this_class = rbxClass::class_map["GuiButton"];
+
+    this_class->constructor = [](lua_State* L, std::shared_ptr<rbxInstance> instance) {
+        setInstanceValue(instance, L, "AutoButtonColor", true, true);
     };
+
+    this_class->newInternalProperty("internal_CanActivate", Primitive, { .value = false });
+    this_class->newInternalProperty("internal_ActivateCount", Primitive, { .value = int32_t(0) });
+    this_class->newInternalProperty("internal_Click1Step1", Primitive, { .value = false });
+    this_class->newInternalProperty("internal_Click2Step1", Primitive, { .value = false });
 }
 
 bool checkAutoButtonColor(std::shared_ptr<rbxInstance> instance) {

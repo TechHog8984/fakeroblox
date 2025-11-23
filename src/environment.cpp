@@ -65,7 +65,7 @@ static int fr_getgc(lua_State* L) {
         return false;
     });
 
-    lua_createtable(L, VisitUserdata.list.size(), 0);
+    createweaktable(L, VisitUserdata.list.size(), 0);
 
     for (size_t i = 0; i < VisitUserdata.list.size(); i++) {
         auto& obj = VisitUserdata.list[i];
@@ -132,9 +132,9 @@ static int fr_getrendersteppedlist(lua_State* L) {
     return 1;
 }
 
-static int fr_safetostring(lua_State* L) {
+static int fr_rawtostring(lua_State* L) {
     luaL_checkany(L, 1);
-    std::string str = safetostring(L, 1);
+    std::string str = rawtostring(L, 1);
 
     lua_pushlstring(L, str.c_str(), str.size());
     return 1;
@@ -218,6 +218,21 @@ static int fr_setrawmetatable(lua_State* L) {
 
     lua_setmetatable(L, 1);
     return 0;
+}
+
+static int fr_setsafeenv(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    const bool enabled = luaL_checkboolean(L, 2);
+    lua_setsafeenv(L, 1, enabled);
+
+    return 0;
+}
+static int fr_issafeenv(lua_State* L) {
+    luaL_checktype(L, 1, LUA_TTABLE);
+    LuaTable* t = hvalue(luaA_toobject(L, 1));
+
+    lua_pushboolean(L, t->safeenv);
+    return 1;
 }
 
 static int fr_rawtfreeze(lua_State* L) {
@@ -314,6 +329,13 @@ static int fr_setthreadidentity(lua_State* L) {
     return 0;
 }
 
+static int fr_tick(lua_State* L) {
+    auto now = std::chrono::system_clock::now();
+
+    lua_pushnumber(L, std::chrono::duration_cast<std::chrono::duration<double>>(now.time_since_epoch()).count());
+    return 1;
+}
+
 void open_fakeroblox_environment(lua_State *L) {
     // methodlookup
     lua_newtable(L);
@@ -335,7 +357,7 @@ void open_fakeroblox_environment(lua_State *L) {
     env_expose(getallthreads)
     env_expose(getrendersteppedlist)
 
-    env_expose(safetostring)
+    env_expose(rawtostring)
 
     env_expose(loadstring)
 
@@ -347,6 +369,9 @@ void open_fakeroblox_environment(lua_State *L) {
 
     env_expose(islclosure)
     env_expose(iscclosure)
+
+    env_expose(setsafeenv)
+    env_expose(issafeenv)
 
     env_expose(getrawmetatable)
     env_expose(setrawmetatable)
@@ -376,10 +401,7 @@ void open_fakeroblox_environment(lua_State *L) {
     env_expose(getthreadidentity)
     env_expose(setthreadidentity)
 
-    lua_getglobal(L, "os");
-    lua_rawgetfield(L, -1, "time");
-    lua_setglobal(L, "tick");
-    lua_pop(L, 1);
+    env_expose(tick)
 
     lua_getglobal(L, "table");
     lua_pushcfunction(L, fr_rawtfreeze, "rawfreeze");

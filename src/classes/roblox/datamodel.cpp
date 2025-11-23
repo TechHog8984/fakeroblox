@@ -43,6 +43,7 @@ void DataModel::onShutdown(lua_State* L) {
         lua_pop(L, 1);
     }
 
+    // NOTE: Close is part of ServiceProvider not DataModel
     pushFunctionFromLookup(L, fireRBXScriptSignal);
     instance->pushEvent(L, "Close");
 

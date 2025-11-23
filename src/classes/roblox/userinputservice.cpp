@@ -2,6 +2,7 @@
 #include "classes/roblox/baseplayergui.hpp"
 #include "classes/roblox/datatypes/enum.hpp"
 #include "classes/roblox/datatypes/rbxscriptsignal.hpp"
+#include "classes/roblox/guibutton.hpp"
 #include "classes/roblox/instance.hpp"
 #include "classes/roblox/serviceprovider.hpp"
 #include "classes/vector2.hpp"
@@ -19,11 +20,15 @@
 
 namespace fakeroblox {
 
-void genericFire(lua_State* L, std::shared_ptr<rbxInstance> instance, const char* event) {
+void genericFire(lua_State* L, std::shared_ptr<rbxInstance> instance, const char* event, std::function<int(void)> pushArgs) {
     pushFunctionFromLookup(L, fireRBXScriptSignal);
     instance->pushEvent(L, event);
 
-    lua_call(L, 1, 0);
+    lua_call(L, 1 + pushArgs(), 0);
+}
+
+void genericFire(lua_State* L, std::shared_ptr<rbxInstance> instance, const char* event) {
+    return genericFire(L, instance, event, []{ return 0; });
 }
 
 void genericFireInputObject(lua_State* L, std::shared_ptr<rbxInstance> instance, const char* event, std::shared_ptr<rbxInstance> input_object, bool game_processed) {
@@ -252,7 +257,7 @@ int global_mouse_wheel = 0;
 bool UserInputService::is_window_focused = false;
 Vector2 UserInputService::mouse_position = GetMousePosition();
 
-void UserInputService::process(lua_State *L) {
+void UserInputService::process(lua_State *L, bool anyImGui) {
     const Vector2 mouse_delta = GetMouseDelta();
     UserInputService::mouse_position = GetMousePosition();
     const Vector2 mouse_wheel_vector = GetMouseWheelMoveV();
@@ -325,17 +330,40 @@ void UserInputService::process(lua_State *L) {
         auto& event = input_event_queue.front();
 
         size_t array_index;
-        if (event.type == InputEvent::MouseClick)
-            array_index = MAX_KEY + 1 + event.mouse_click.mouse;
-        else if (event.type == InputEvent::MouseMovement)
-            array_index = MAX_KEY + 4;
-        else if (event.type == InputEvent::MouseWheel)
-            array_index = MAX_KEY + 5;
-        else {
-            assert(event.type == InputEvent::Keyboard);
-            array_index = event.keyboard.key;
+        switch (event.type) {
+            case InputEvent::MouseClick:
+                array_index = MAX_KEY + 1 + event.mouse_click.mouse;
+                break;
+            case InputEvent::MouseMovement:
+                array_index = MAX_KEY + 4;
+                break;
+            case InputEvent::MouseWheel:
+                array_index = MAX_KEY + 5;
+                break;
+            case InputEvent::Keyboard:
+                array_index = event.keyboard.key;
+                break;
         }
 
+        if (anyImGui) {
+            switch (event.type) {
+                case InputEvent::MouseClick:
+                    if (event.state == InputBegan)
+                        goto POP;
+                    break;
+                case InputEvent::MouseMovement:
+                    if (event.state == InputBegan || event.state == InputChanged)
+                        goto POP;
+                    break;
+                case InputEvent::MouseWheel:
+                    goto POP;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        {
         const char* input_state = INPUT_STATE_MAP[event.state];
         const char* input_signal = INPUT_SIGNAL_MAP[event.state];
 
@@ -392,10 +420,12 @@ void UserInputService::process(lua_State *L) {
         // TODO: gameProcessedEvent
         const static bool game_processed = false;
 
+        bool has_instance = false;
         std::shared_ptr<rbxInstance> event_instance;
-        if (auto ptr = event.instance.lock())
+        if (auto ptr = event.instance.lock()) {
             event_instance = ptr;
-        else
+            has_instance = true;
+        } else
             event_instance = ServiceProvider::service_map.at("UserInputService");
 
         genericFireInputObject(L, event_instance, input_signal, input_object, game_processed);
@@ -413,14 +443,76 @@ void UserInputService::process(lua_State *L) {
         auto clickable = getClickableGuiObject().lock();
         if (clickable) {
             if (event.type == InputEvent::MouseClick) {
-                // TODO: MouseButton*Click & Activated signals
+                const auto mouse = event.mouse_click.mouse;
+
+                const char* click_step1_name = mouse ? "internal_Click2Step1" : "internal_Click1Step1";
+
+                if (event.state == InputEnded && mouse < 2 && getInstanceValue<bool>(clickable, click_step1_name)) {
+                    std::string button_signal = "MouseButton";
+                    button_signal.reserve(17);
+
+                    button_signal += ('1' + mouse);
+                    button_signal.append("Click");
+                    genericFire(L, clickable, button_signal.c_str());
+                }
+
                 std::string button_signal = "MouseButton";
-                button_signal += ('1' + event.mouse_click.mouse);
+                button_signal.reserve(16);
+
+                button_signal += ('1' + mouse);
                 button_signal.append(event.state == InputBegan ? "Down" : "Up");
-                genericFire(L, clickable, button_signal.c_str());
+                genericFire(L, clickable, button_signal.c_str(), [&L] {
+                    lua_pushinteger(L, mouse_position.x);
+                    lua_pushinteger(L, mouse_position.y);
+
+                    return 2;
+                });
+
+                if (event.state == InputBegan) {
+                    setInstanceValue(clickable, L, "internal_CanActivate", true, true);
+
+                    setInstanceValue(clickable, L, click_step1_name, true, true);
+                } else if (event.state == InputEnded) {
+                    if (getInstanceValue<bool>(clickable, "internal_CanActivate")) {
+                        pushFunctionFromLookup(L, fireRBXScriptSignal);
+                        clickable->pushEvent(L, "Activated");
+
+                        lua_pushinstance(L, input_object);
+                        lua_pushinteger(L, getInstanceValue<int32_t>(clickable, "internal_ActivateCount"));
+
+                        lua_call(L, 3, 0);
+                        // TODO: ActivateCount should be increase every time we click it and then set to 0 only when it's been x seconds after the last click
+                        setInstanceValue(clickable, L, "internal_ActivateCount", int32_t(0), true);
+                    }
+                }
             }
         }
 
+        if (has_instance && event_instance->isA("GuiButton")) {
+            // if this behavior seems weird, note that it's accurate!
+            if (event.type == InputEvent::MouseMovement && event.state == InputEnded && !IsMouseButtonDown(0))
+                setInstanceValue(event_instance, L, "internal_CanActivate", false);
+        }
+
+        if (event.type == InputEvent::MouseClick && event.state == InputEnded) {
+            std::lock_guard lock(rbxInstance::instance_list_mutex);
+
+            for (size_t i = 0; i < rbxInstance::instance_list.size(); i++) {
+                auto instance = rbxInstance::instance_list[i].lock();
+                if (!instance)
+                    continue;
+
+                if (!instance->isA("GuiButton"))
+                    continue;
+
+                setInstanceValue(instance, L, "internal_Click1Step1", false, true);
+                setInstanceValue(instance, L, "internal_Click2Step1", false, true);
+            }
+        }
+
+        }
+
+        POP:
         input_event_queue.pop();
     }
 }
@@ -442,7 +534,7 @@ namespace rbxInstance_UserInputService_methods {
         if (lua_isnumber(L, 2))
             mouse = luaL_checkinteger(L, 2);
         else 
-            mouse = lua_checkenumitem(L, 2)->value;
+            mouse = lua_checkenumitem(L, 2, "UserInputType")->value;
 
         if (mouse > 2) {
             getTask(L)->console->warning("UserInputService.IsMouseButtonPressed - UserInputType provided is not a mouse button.");

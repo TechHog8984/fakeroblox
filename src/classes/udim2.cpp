@@ -42,22 +42,42 @@ static int UDim2_new(lua_State* L) {
 
     return pushUDim2(L, x, y);
 }
+static int UDim2_fromOffset(lua_State* L) {
+    int argc = lua_gettop(L);
+    if (argc < 1)
+        return pushUDim2(L, { .scale = 0, .offset = 0 }, { .scale = 0, .offset = 0 });
+
+    UDim x{0, static_cast<float>(luaL_optnumberloose(L, 1, 0.f))};
+    UDim y{0, static_cast<float>(luaL_optnumberloose(L, 2, 0.f))};
+
+    return pushUDim2(L, x, y);
+}
+static int UDim2_fromScale(lua_State* L) {
+    int argc = lua_gettop(L);
+    if (argc < 1)
+        return pushUDim2(L, { .scale = 0, .offset = 0 }, { .scale = 0, .offset = 0 });
+
+    UDim x{static_cast<float>(luaL_optnumberloose(L, 1, 0.f)), 0};
+    UDim y{static_cast<float>(luaL_optnumberloose(L, 2, 0.f)), 0};
+
+    return pushUDim2(L, x, y);
+}
 
 UDim2* lua_checkudim2(lua_State* L, int narg) {
-    void* ud = luaL_checkudata(L, narg, "UDim2");
+    void* ud = luaL_checkudatareal(L, narg, "UDim2");
 
     return static_cast<UDim2*>(ud);
 }
 
 static int UDim2__tostring(lua_State* L) {
-    UDim2* udim2 = static_cast<UDim2*>(luaL_checkudata(L, 1, "UDim2"));
+    UDim2* udim2 = lua_checkudim2(L, 1);
 
     lua_pushfstringL(L, "{%.f, %.f}, {%.f, %.f}", udim2->x.scale, udim2->x.offset, udim2->y.scale, udim2->y.offset);
     return 1;
 }
 
 static int UDim2__index(lua_State* L) {
-    UDim2* udim2 = static_cast<UDim2*>(luaL_checkudata(L, 1, "UDim2"));
+    UDim2* udim2 = lua_checkudim2(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     // FIXME: methods
@@ -74,8 +94,7 @@ static int UDim2__index(lua_State* L) {
     luaL_error(L, "%s is not a valid member of UDim2", key);
 }
 static int UDim2__newindex(lua_State* L) {
-    // UDim2* udim2 = static_cast<UDim2*>(luaL_checkudata(L, 1, "UDim2"));
-    luaL_checkudata(L, 1, "UDim2");
+    lua_checkudim2(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     if (strequal(key, "X") || strequal(key, "Width") ||
@@ -88,8 +107,7 @@ static int UDim2__newindex(lua_State* L) {
     return 0;
 }
 static int UDim2__namecall(lua_State* L) {
-    // UDim2* udim2 = static_cast<UDim2*>(luaL_checkudata(L, 1, "UDim2"));
-    luaL_checkudata(L, 1, "UDim2");
+    lua_checkudim2(L, 1);
     const char* namecall = lua_namecallatom(L, nullptr);
     if (!namecall)
         luaL_error(L, "no namecall method!");
@@ -100,8 +118,8 @@ static int UDim2__namecall(lua_State* L) {
 }
 
 static int UDim2__add(lua_State* L) {
-    UDim2* a = static_cast<UDim2*>(luaL_checkudata(L, 1, "UDim2"));
-    UDim2* b = static_cast<UDim2*>(luaL_checkudata(L, 2, "UDim2"));
+    UDim2* a = lua_checkudim2(L, 1);
+    UDim2* b = lua_checkudim2(L, 2);
 
     return pushUDim2(L, {
         .scale = a->x.scale + b->x.scale,
@@ -112,8 +130,8 @@ static int UDim2__add(lua_State* L) {
     });
 }
 static int UDim2__sub(lua_State* L) {
-    UDim2* a = static_cast<UDim2*>(luaL_checkudata(L, 1, "UDim2"));
-    UDim2* b = static_cast<UDim2*>(luaL_checkudata(L, 2, "UDim2"));
+    UDim2* a = lua_checkudim2(L, 1);
+    UDim2* b = lua_checkudim2(L, 2);
 
     return pushUDim2(L, {
         .scale = a->x.scale - b->x.scale,
@@ -129,6 +147,8 @@ void open_udim2lib(lua_State *L) {
     lua_newtable(L);
 
     setfunctionfield(L, UDim2_new, "new", true);
+    setfunctionfield(L, UDim2_fromOffset, "fromOffset", true);
+    setfunctionfield(L, UDim2_fromScale, "fromScale", true);
 
     lua_setglobal(L, "UDim2");
 

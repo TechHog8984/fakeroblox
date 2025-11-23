@@ -153,8 +153,7 @@ void UI_DrawEntryList_render(lua_State *L) {
             case DrawEntry::DrawTypeCircle: {
                 DrawEntryCircle* entry_circle = static_cast<DrawEntryCircle*>(entry);
 
-                // TODO: thickness (doesn't work yet)
-                // ImGui::DragScalar("Thickness", ImGuiDataType_Double, &entry_circle->thickness);
+                ImGui::DragScalar("Thickness", ImGuiDataType_Double, &entry_circle->thickness);
                 ImGui::DragScalar("NumSides", ImGuiDataType_S32, &entry_circle->num_sides);
                 ImGui::DragScalar("Radius", ImGuiDataType_Double, &entry_circle->radius);
                 ImGui::Checkbox("Filled", &entry_circle->filled);
@@ -171,6 +170,7 @@ void UI_DrawEntryList_render(lua_State *L) {
                 Vector2 position{rect.x, rect.y};
                 ImGui_DragVector2("Size", size);
                 ImGui_DragVector2("Position", position);
+                ImGui::DragScalar("Rounding", ImGuiDataType_Double, &entry_square->rounding);
 
                 rect.width = size.x;
                 rect.height = size.y;

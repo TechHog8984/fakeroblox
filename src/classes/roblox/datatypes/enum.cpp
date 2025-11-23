@@ -1,7 +1,6 @@
 #include "classes/roblox/datatypes/enum.hpp"
 #include "common.hpp"
 
-#include "console.hpp"
 #include "lua.h"
 #include "lualib.h"
 
@@ -54,6 +53,18 @@ int pushEnumItem(lua_State* L, EnumItemWrapper& wrapper) {
     return pushEnumItem(L, wrapper.enum_name, wrapper.name);
 }
 
+EnumItem& getEnumItemFromWrapper(EnumItemWrapper& wrapper) {
+    return Enum::enum_map.at(wrapper.enum_name).item_map.at(wrapper.name);
+}
+
+EnumItem& getEnumItemFromValue(const char* enum_name, unsigned int value) {
+    auto& e = Enum::enum_map.at(enum_name);
+    for (auto it = e.item_map.begin(); it != e.item_map.end(); it++)
+        if (it->second.value == value)
+            return it->second;
+    throw std::runtime_error("no item in given enum exists with given value");
+}
+
 static void Enum__dtor(lua_State* L, void* ud) {
     Enum* enum_ptr = static_cast<Enum*>(ud);
     enum_ptr->~Enum();
@@ -64,7 +75,8 @@ static void EnumItem__dtor(lua_State* L, void* ud) {
 }
 
 Enum* lua_checkenum(lua_State* L, int narg) {
-    return static_cast<Enum*>(luaL_checkudata(L, narg, "Enum"));
+    void* ud = luaL_checkudatareal(L, narg, "Enum");
+    return static_cast<Enum*>(ud);
 }
 
 static int Enum__tostring(lua_State* L) {
@@ -84,19 +96,52 @@ static int Enum__index(lua_State* L) {
     return pushEnumItem(L, _enum->name, key);
 }
 
-EnumItem* lua_checkenumitem(lua_State* L, int narg) {
-    return static_cast<EnumItem*>(luaL_checkudata(L, narg, "EnumItem"));
+EnumItem* checkEnumItem(lua_State* L, int narg) {
+    void* ud = luaL_checkudatareal(L, narg, "EnumItem");
+    auto enum_item = static_cast<EnumItem*>(ud);
+
+    return enum_item;
+}
+EnumItem* lua_checkenumitem(lua_State* L, int narg, const char* expected_enum) {
+    // we need an expected_enum because we also have value and name checks
+    assert(expected_enum);
+    auto& e = Enum::enum_map.at(expected_enum);
+
+    {
+        int is_num;
+        unsigned i = lua_tointegerx(L, narg, &is_num);
+        if (is_num) {
+            // TODO: this is duplicate code from getEnumItemFromValue cuz that doesn't return a ptr
+            for (auto it = e.item_map.begin(); it != e.item_map.end(); it++)
+                if (it->second.value == i)
+                    return &it->second;
+            luaL_error(L, "Invalid value %d for enum %s", i, expected_enum);
+        }
+    }
+
+    {
+        size_t strl;
+        const char* str = lua_tolstring(L, narg, &strl);
+        if (str) {
+            auto result = e.item_map.find(str);
+            if (result == e.item_map.end())
+                luaL_error(L, "Invalid value \"%.*s\" for enum %s", static_cast<int>(strl), str, expected_enum);
+            return &result->second;
+        }
+    }
+
+    return checkEnumItem(L, narg);
 }
 
 static int EnumItem__tostring(lua_State* L) {
-    EnumItem* enum_item = lua_checkenumitem(L, 1);
+    EnumItem* enum_item = checkEnumItem(L, 1);
 
     lua_pushfstring(L, "Enum.%s.%s", enum_item->enum_name.c_str(), enum_item->name.c_str());
     return 1;
 }
 
 static int EnumItem__index(lua_State* L) {
-    EnumItem* enum_item = lua_checkenumitem(L, 1);
+    EnumItem* enum_item = checkEnumItem(L, 1);
     const char* key = luaL_checkstring(L, 2);
 
     if (strequal(key, "Name"))
@@ -111,15 +156,15 @@ static int EnumItem__index(lua_State* L) {
     return 1;
 }
 static int EnumItem__eq(lua_State* L) {
-    EnumItem* a = lua_checkenumitem(L, 1);
-    EnumItem* b = lua_checkenumitem(L, 2);
+    EnumItem* a = checkEnumItem(L, 1);
+    EnumItem* b = checkEnumItem(L, 2);
 
     lua_pushboolean(L, a->enum_name == b->enum_name && a->value == b->value);
     return 1;
 }
 
 void lua_checkenums(lua_State* L, int narg) {
-    luaL_checkudata(L, narg, "Enums");
+    luaL_checkudatareal(L, narg, "Enums");
 }
 
 static int Enums__tostring(lua_State* L) {

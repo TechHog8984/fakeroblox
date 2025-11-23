@@ -42,7 +42,7 @@ int pushNewRBXScriptConnection(lua_State* L, int func_index) {
 }
 
 rbxScriptConnection* lua_checkrbxscriptconnection(lua_State* L, int narg) {
-    void* ud = luaL_checkudata(L, narg, "RBXScriptConnection");
+    void* ud = luaL_checkudatareal(L, narg, "RBXScriptConnection");
 
     return static_cast<rbxScriptConnection*>(ud);
 }

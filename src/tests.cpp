@@ -52,7 +52,6 @@ namespace fakeroblox {
         { .name = "instance changed", .value = "local count = 0\n"
             "local inst = Instance.new(\"Part\")\n"
             "inst.Changed:Connect(function()\n"
-            "    print(111111)\n"
             "    count += 1\n"
             "end)\n"
             "task.wait();"
@@ -68,17 +67,17 @@ namespace fakeroblox {
             "assert(count == 1)\n"
             "inst:Destroy()\n"
             "task.wait();"
-            "assert(count == 2)\n"
+            "assert(count == 1)\n"
         },
 
         { .name = "Enum equality", .value = "assert(Enum.KeyCode == Enum.KeyCode) "},
         { .name = "EnumItem equality", .value = "assert(Enum.KeyCode.A == Enum.KeyCode.A)" },
 
-        { .name = "ServiceProvider", .value = "if shared.ignoreserviceprovider then \
+        { .name = "ServiceProvider", .value = "if shared.ignoreserviceprovidertest then \
                 warn('SKIPPING SERVICEPROVIDER TEST SINCE IT ALREADY RAN') \
                 return \
             end \
-            shared.ignoreserviceprovider = true \
+            shared.ignoreserviceprovidertest = true \
             assert(not game:FindService('HeightmapImporterService')) \
             assert(game:GetService('HeightmapImporterService')) \
             assert(game:FindService('HeightmapImporterService')) \
