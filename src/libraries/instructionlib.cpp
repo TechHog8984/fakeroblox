@@ -476,13 +476,10 @@ void stephook(lua_State* L, lua_Debug* ar) {
 
 void onEnableStephookChange(lua_State* L) {
     // TODO: this should also be based on how many connections there are to the signal, if possible
-    if (enable_stephook) {
-        lua_singlestep(L, true);
+    if (enable_stephook)
         lua_callbacks(L)->debugstep = stephook;
-    } else {
-        lua_singlestep(L, false);
+    else
         lua_callbacks(L)->debugstep = nullptr;
-    }
 }
 
 }; // namespace fakeroblox

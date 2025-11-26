@@ -254,6 +254,8 @@ int main(int argc, char** argv) {
     lua_getglobal(L, "shared");
     lua_setreadonly(L, -1, false);
 
+    lua_singlestep(L, true); // needed for stephook
+
     lua_State* appL = TaskScheduler::newThread(L, [] (std::string error) { Console::ScriptConsole.error(error); });
     lua_pop(L, 1);
     Console::ScriptConsole.debugf("app state: %p", appL);
