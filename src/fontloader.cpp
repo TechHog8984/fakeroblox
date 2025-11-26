@@ -1,5 +1,6 @@
 #include "fontloader.hpp"
 #include "common.hpp"
+#include "libraries/filesystemlib.hpp"
 
 namespace fakeroblox {
 
@@ -16,10 +17,22 @@ void FontLoader::load() {
     font_name_list.reserve(font_count);
 
     Font font_default = GetFontDefault();
-    Font font_ui = LoadFont("assets/Segoe UI.ttf");
-    Font font_proggy = LoadFont("assets/ProggyClean.ttf");
-    Font font_plex = LoadFont("assets/IBMPlexSans.ttf");
-    Font font_monospace = LoadFont("assets/SometypeMono.ttf");
+
+    std::string tmp_font_path;
+
+    #define getFont(varname, path)                                                 \
+        tmp_font_path.assign(FileSystem::home_path);                               \
+        tmp_font_path.append("assets/" path);                                      \
+        Font varname = LoadFont(tmp_font_path.c_str());                            \
+        if (!IsFontValid(varname))                                                 \
+            throw std::runtime_error("failed to load font " + std::string(path));
+
+    getFont(font_ui, "Segoe UI.ttf")
+    getFont(font_proggy, "ProggyClean.ttf")
+    getFont(font_plex, "IBMPlexSans.ttf")
+    getFont(font_monospace, "SometypeMono.ttf")
+
+    #undef getFont
 
     font_list.push_back(new Font(font_default));
     font_list.push_back(new Font(font_ui));

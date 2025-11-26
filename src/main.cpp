@@ -161,7 +161,7 @@ int main(int argc, char** argv) {
     {
     const char* user_home = getenv("HOME");
     if (user_home == NULL) {
-        fprintf(stderr, "ERROR: failed to get HOME environment variable");
+        fprintf(stderr, "ERROR: failed to get HOME environment variable\n");
         return 1;
     }
 
@@ -172,11 +172,11 @@ int main(int argc, char** argv) {
     FileSystem::workspace_path.append("workspace/");
 
     if (!std::filesystem::exists(FileSystem::home_path) && !std::filesystem::create_directory(FileSystem::home_path)) {
-        fprintf(stderr, "ERROR: failed to create folder at $HOME/fakeroblox");
+        fprintf(stderr, "ERROR: failed to create folder at $HOME/fakeroblox\n");
         return 1;
     }
     if (!std::filesystem::exists(FileSystem::workspace_path) && !std::filesystem::create_directory(FileSystem::workspace_path)) {
-        fprintf(stderr, "ERROR: failed to create folder at $HOME/fakeroblox/workspace");
+        fprintf(stderr, "ERROR: failed to create folder at $HOME/fakeroblox/workspace\n");
         return 1;
     }
 
@@ -184,9 +184,11 @@ int main(int argc, char** argv) {
 
     std::string api_dump;
     try {
-        api_dump.assign(readFileToString("assets/Full-API-Dump.json"));
+        std::string path = FileSystem::home_path;
+        path.append("assets/Full-API-Dump.json");
+        api_dump.assign(readFileToString(path.c_str()));
     } catch (std::exception& e) {
-        fprintf(stderr, "ERROR: failed to read assets/Full-API-Dump.json: %s", e.what());
+        fprintf(stderr, "ERROR: failed to read $HOME/fakeroblox/assets/Full-API-Dump.json: %s\n", e.what());
         return 1;
     }
 
@@ -314,7 +316,19 @@ int main(int argc, char** argv) {
 
     pushNewScriptEditorTab();
 
-    round_shader = LoadShader("assets/base.vs", "assets/rounded_rectangle.fs");
+    {
+        std::string base_path = FileSystem::home_path;
+        base_path.append("assets/base.vs");
+        std::string rounded_path = FileSystem::home_path;
+        rounded_path.append("assets/rounded_rectangle.fs");
+
+        round_shader = LoadShader(base_path.c_str(), rounded_path.c_str());
+
+        if (!IsShaderValid(round_shader)) {
+            fprintf(stderr, "ERROR: failed to load shaders at %s and %s\n", base_path.c_str(), rounded_path.c_str());
+            return 1;
+        }
+    }
     float shader_zero = 0.f;
 
     {
