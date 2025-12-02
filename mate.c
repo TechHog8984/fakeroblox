@@ -29,6 +29,7 @@ int main() {
     AddIncludePaths(executable, "./dependencies/Luau/VM/src");
 
     AddIncludePaths(executable, "./dependencies/rlImGui");
+    AddIncludePaths(executable, "./dependencies/rlImGui/raylib-master/src");
     AddIncludePaths(executable, "./dependencies/rlImGui/imgui-master");
 
     LinkSystemLibraries(executable, "m", "stdc++", "raylib");
