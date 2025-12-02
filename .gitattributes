@@ -1,3 +1,3 @@
 mate.h linguist-vendored
-dependencies/uuid_v4 linguist-vendored
-luascripts linguist-vendored
+dependencies/uuid_v4/** linguist-vendored
+luascripts/** linguist-vendored
