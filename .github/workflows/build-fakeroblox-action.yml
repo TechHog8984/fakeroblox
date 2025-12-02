@@ -51,7 +51,7 @@ jobs:
 
             python3 ./build_ImGuiFileDialog.py
 
-            echo "built" > dependencies/built.txt
+            echo "built" > ./built.txt
 
             popd
           fi
