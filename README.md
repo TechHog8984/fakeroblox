@@ -25,7 +25,7 @@ cd dependencies
 
 python3 ./build_curl.py & \
 python3 ./build_rlImGui.py & \
-python3 ./build_luau.py & \
+python3 ./build_luau.py
 
 # after rlImGui has fetched imgui
 
