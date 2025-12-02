@@ -13,7 +13,7 @@ jobs:
           key: ${{ runner.os}}-dependencies-${{ hashFiles('dependenciesver.txt') }}
       - name: build dependencies
         run: |
-          if [ ! -d "dependencies" ]; then
+          if [ ! -f "dependencies/built.txt" ]; then
             echo "fetching dependencies"
 
             git submodule init
@@ -29,7 +29,7 @@ jobs:
 
             python3 ./build_ImGuiFileDialog.py
 
-            echo "built" > dependencies/build.txt
+            echo "built" > dependencies/built.txt
 
             popd
           fi
