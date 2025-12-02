@@ -32,6 +32,8 @@ jobs:
               libwayland-dev \
               libxkbcommon-dev
 
+            pushd dependencies
+
             echo "configuring curl"
             pushd curl
 
@@ -41,8 +43,6 @@ jobs:
             popd
 
             echo "building dependencies"
-
-            pushd dependencies
 
             python3 ./build_curl.py & \
             python3 ./build_rlImGui.py & \
