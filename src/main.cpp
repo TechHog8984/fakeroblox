@@ -332,9 +332,11 @@ int main(int argc, char** argv) {
     float shader_zero = 0.f;
 
     {
-        SetShaderValue(round_shader, GetShaderLocation(round_shader, "radius"), (float[]){ 5.f, 5.f, 5.f, 5.f }, SHADER_UNIFORM_VEC4);
+        float vec4[] = { 5.f, 5.f, 5.f, 5.f };
+        float vec2[] = { 0.f, 0.f };
+        SetShaderValue(round_shader, GetShaderLocation(round_shader, "radius"), vec4, SHADER_UNIFORM_VEC4);
         SetShaderValue(round_shader, GetShaderLocation(round_shader, "shadowRadius"), &shader_zero, SHADER_UNIFORM_FLOAT);
-        SetShaderValue(round_shader, GetShaderLocation(round_shader, "shadowOffset"), (float[]){ 0.f, 0.f }, SHADER_UNIFORM_VEC2);
+        SetShaderValue(round_shader, GetShaderLocation(round_shader, "shadowOffset"), vec2, SHADER_UNIFORM_VEC2);
         SetShaderValue(round_shader, GetShaderLocation(round_shader, "shadowScale"), &shader_zero, SHADER_UNIFORM_FLOAT);
         SetShaderValue(round_shader, GetShaderLocation(round_shader, "borderThickness"), &shader_zero, SHADER_UNIFORM_FLOAT);
     }
