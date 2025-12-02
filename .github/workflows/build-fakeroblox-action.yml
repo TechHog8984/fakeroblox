@@ -1,0 +1,52 @@
+name: Build FakeRoblox
+on: [push]
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: check out repository
+        uses: actions/checkout@v5
+        with:
+          submodules: 'recursive'
+      - name: cache for dependencies
+        uses: actions/cache@v4
+        with:
+          path: dependencies
+          key: ${{ runner.os}}-dependencies-${{ hashFiles('dependenciesver.txt') }}
+      - name: build dependencies
+        run: |
+          if [ ! -f "dependencies/built.txt" ]; then
+            echo "building dependencies"
+
+            python3 ./build_curl.py & \
+            python3 ./build_rlImGui.py & \
+            python3 ./build_luau.py & \
+
+            python3 ./build_ImGuiFileDialog.py
+
+            echo "built" > dependencies/build.txt
+          fi
+      - name: build mate
+        run: gcc -o mate mate.c
+      - name: run mate
+        run: ./mate
+      - name: create timestamp
+        id: timestamp
+        run: echo "value=$(date +'%F_%H-%M-%S')" >> $GITHUB_OUTPUT
+      - name: create tag
+        run: |
+          git tag fakeroblox-ubuntu-${{ steps.timestamp.outputs.value }}
+          git push origin fakeroblox-ubuntu-${{ steps.timestamp.outputs.value }}
+      - name: create release
+        id: create_fakeroblox_release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release fakeroblox ubuntu ${{ steps.timestamp.outputs.value }}
+          tag_name: fakeroblox-ubuntu-${{ steps.timestamp.outputs.value }}
+          body: ${{ github.sha }}
+          draft: false
+          prerelease: true
+          files: build/fakeroblox
+          token: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write
