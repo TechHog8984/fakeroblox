@@ -30,7 +30,8 @@ jobs:
               libxcursor-dev \
               libxinerama-dev \
               libwayland-dev \
-              libxkbcommon-dev
+              libxkbcommon-dev \
+              libpsl-dev
 
             pushd dependencies
 
