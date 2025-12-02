@@ -145,7 +145,7 @@ void TaskScheduler::killThreadUnlocked(lua_State* thread) {
     Task* task = getTask(thread);
     lua_unref(task->parent, task->ref);
 
-    std::lock_guard thread_queue_lock(thread_queue_mutex);
+    std::shared_lock thread_queue_lock(thread_queue_mutex);
 
     auto thread_queue_position = std::find(thread_queue.begin(), thread_queue.end(), thread);
     if (thread_queue_position != thread_queue.end())
@@ -430,7 +430,7 @@ std::optional<PreSpawnResult> preTaskSpawn(lua_State* L, const char* func_name, 
 }
 
 void TaskScheduler::queueThread(lua_State* thread) {
-    std::lock_guard lock(thread_queue_mutex);
+    std::shared_lock lock(thread_queue_mutex);
     thread_queue.push_back(thread);
 }
 
