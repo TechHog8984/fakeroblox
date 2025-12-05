@@ -19,7 +19,22 @@ NOTE: fakeroblox CURRENTLY does _not_ have a process for building neither for or
 
 fakeroblox uses [mate.h](https://github.com/TomasBorquez/mate.h/) for its core build system, along with some python files to build the dependencies.
 <br>
-To build dependencies, just run each script inside the dependencies folder with python:
+To build dependencies, first ensure you have their respective dependencies installed. You can usually find this on each project page, but here is a command you can run on Ubuntu for reference:
+```bash
+sudo apt-get install cmake build-essential git \
+    libasound2-dev \
+    libx11-dev \
+    libxrandr-dev \
+    libxi-dev \
+    libgl1-mesa-dev \
+    libglu1-mesa-dev \
+    libxcursor-dev \
+    libxinerama-dev \
+    libwayland-dev \
+    libxkbcommon-dev \
+    libpsl-dev
+```
+Then just run each script inside the dependencies folder with python:
 ```bash
 cd dependencies
 
