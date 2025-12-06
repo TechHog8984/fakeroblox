@@ -83,6 +83,7 @@ class TaskScheduler {
     static void killThreadUnlocked(lua_State* thread);
 public:
     static bool sandboxing;
+    static double initial_client_time;
 
     static void setup(lua_State* L);
 

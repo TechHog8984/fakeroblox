@@ -60,6 +60,7 @@ const char* capabilityTostring(ThreadCapability capability) {
 };
 
 bool TaskScheduler::sandboxing = true;
+double TaskScheduler::initial_client_time = 0; // gets set in main
 
 int TaskScheduler::target_fps = 240;
 std::shared_mutex TaskScheduler::target_fps_mutex;
@@ -441,12 +442,6 @@ void TaskScheduler::queueForResume(lua_State* thread, int arg_count) {
     task->arg_count = arg_count;
     task->timing = TaskTiming { .type = TaskTiming::Instant };
     TaskScheduler::queueThread(thread);
-}
-
-double getSeconds(lua_State* L, int arg = 1) {
-    double seconds = luaL_optnumber(L, arg, 0.0);
-    luaL_argcheck(L, seconds >= 0.0, arg, "seconds must be positive");
-    return seconds;
 }
 
 int fr_task_wait(lua_State* L) {

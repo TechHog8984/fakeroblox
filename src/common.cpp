@@ -35,6 +35,12 @@ int countDecimals(double value) {
     return 10;
 }
 
+double getSeconds(lua_State* L, int arg) {
+    double seconds = luaL_optnumber(L, arg, 0.0);
+    luaL_argcheck(L, seconds >= 0.0, arg, "seconds must be positive");
+    return seconds;
+}
+
 std::map<size_t, Destructor> sharedptr_destructor_list;
 std::map<void*, size_t> object_destructor_map;
 

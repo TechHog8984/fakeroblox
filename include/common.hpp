@@ -36,6 +36,8 @@ extern bool print_stdout;
 int countDecimals(double value);
 #define decimalFmt(value) countDecimals(value), value
 
+double getSeconds(lua_State* L, int arg = 1);
+
 #define SHAREDPTR_TAG_COUNT 2
 using Destructor = std::function<void(void*)>;
 
