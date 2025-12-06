@@ -17,5 +17,6 @@
 
 -Idependencies/rlImGui
 -Idependencies/rlImGui/imgui-master
+-Idependencies/rlImGui/raylib-master/src
 
 -Idependencies/ImGuiColorTextEdit

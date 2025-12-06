@@ -32,8 +32,7 @@ sudo apt-get install cmake build-essential git \
     libxinerama-dev \
     libwayland-dev \
     libxkbcommon-dev \
-    libpsl-dev \
-    libopenssl-dev
+    libpsl-dev
 ```
 Then just run each script inside the dependencies folder with python:
 ```bash
