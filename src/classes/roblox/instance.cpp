@@ -33,6 +33,7 @@
 #include "lstate.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <map>
@@ -429,6 +430,34 @@ namespace rbxInstance_methods {
 
         lua_pushboolean(L, isDescendantOf(instance, other));
         return 1;
+    }
+
+    static int waitForChild(lua_State* L) {
+        auto instance = lua_checkinstance(L, 1);
+        std::string name = luaL_checkstring(L, 2);
+        const double timeout = luaL_optnumber(L, 3, 5);
+
+        auto child = instance->findFirstChild(name);
+        if (child) {
+            lua_pushinstance(L, child);
+            return 1;
+        }
+
+        return TaskScheduler::yieldForWork(L, [instance, name, timeout] (lua_State* thread) {
+            auto start = std::chrono::system_clock::now();
+
+            auto child = instance->findFirstChild(name);
+            while (!child) {
+                if (std::chrono::duration<double>(std::chrono::system_clock::now() - start).count() >= timeout) {
+                    getTask(thread)->console->warningf("TODO this message lol; infinite yield possible while waiting for child \"%.*s\"", static_cast<int>(name.size()), name.c_str());
+                    return 0;
+                }
+                child = instance->findFirstChild(name);
+            }
+
+            lua_pushinstance(thread, child);
+            return 1;
+        });
     }
 }; // namespace rbxInstance_methods
 
@@ -1219,6 +1248,7 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
     rbxClass::class_map["Object"]->methods.at("GetPropertyChangedSignal").func = rbxInstance_methods::getPropertyChangedSignal;
     rbxClass::class_map["Object"]->methods.at("IsA").func = rbxInstance_methods::isA;
     rbxClass::class_map["Instance"]->methods.at("IsDescendantOf").func = rbxInstance_methods::isDescendantOf;
+    rbxClass::class_map["Instance"]->methods.at("WaitForChild").func = rbxInstance_methods::waitForChild;
 
     // metatable
     luaL_newmetatable(L, "Instance");
