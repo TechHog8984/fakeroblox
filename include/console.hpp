@@ -15,6 +15,7 @@ enum ConsoleId {
 };
 
 class Console {
+    std::string whole_content;
 public:
     static Console ScriptConsole;
     static Console TestsConsole;
@@ -50,6 +51,8 @@ public:
 
     void clear();
     void renderMessages();
+    // NOTE: not thread-safe
+    std::string& getWholeContent();
 
     void log(std::string message, Message::Type type);
 

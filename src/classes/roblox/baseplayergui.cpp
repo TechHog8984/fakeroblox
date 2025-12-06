@@ -8,6 +8,7 @@
 
 #include "common.hpp"
 
+#include "console.hpp"
 #include "raylib.h"
 #include "rlgl.h"
 
@@ -95,111 +96,174 @@ std::vector<std::shared_ptr<rbxInstance>> mouse_leave_list;
 std::map<rbxInstance*, bool> mouse_over_map;
 
 // NOTE: expects Parent
-static bool isStorageChild(std::shared_ptr<rbxInstance> instance) {
-    auto parent = getInstanceValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
+bool isStorageChild(std::shared_ptr<rbxInstance> instance) {
+    const auto parent = getInstanceValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
     assert(parent);
 
     return std::find(gui_storage_list.begin(), gui_storage_list.end(), parent) != gui_storage_list.end();
 }
 Vector2 Vector2Zero{0, 0};
 
+struct GuiObjectBorder {
+    Vector2 position;
+    Vector2 size;
+    float rotation;
+    int border_size;
+    Color border_color;
+};
+
 void renderGuiObject(lua_State* L, std::shared_ptr<rbxInstance> instance, Vector2 mouse, bool anyImGui) {
-    auto parent = getInstanceValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
-    const bool is_storage_child = isStorageChild(parent);
+    bool clips_descendants = false;
+    std::optional<GuiObjectBorder> border_opt;
 
-    // FIXME: separate function for pos&size calculations that only get called on parent changed?
-    // necessary so a newly-created guiobject's Absolute* values are accurate before render
-    auto parent_absolute_position = is_storage_child ? Vector2Zero : getInstanceValue<Vector2>(parent, "AbsolutePosition");
-    auto parent_absolute_size = is_storage_child ? rbxCamera::screen_size : getInstanceValue<Vector2>(parent, "AbsoluteSize");
-    auto parent_absolute_rotation = is_storage_child ? 0.0f : getInstanceValue<float>(parent, "AbsoluteRotation");
+    const bool is_layer_collector = instance->isA("LayerCollector");
 
-    auto& position = getInstanceValue<UDim2>(instance, "Position");
-    auto& size = getInstanceValue<UDim2>(instance, "Size");
-    auto rotation = getInstanceValue<float>(instance, "Rotation");
+    // FIXME: we need to do something about descendants. currently, rotation has no effect. also, clips descendants doesn't do anything.
+    // I think we need to render to individual render textures IN REVERSE ORDER?
 
-    auto position_x_scale = position.x.scale;
-    auto position_y_scale = position.y.scale;
+    if (!is_layer_collector) {
+        clips_descendants = getInstanceValue<bool>(instance, "ClipsDescendants");
 
-    Vector2 absolute_position{
-        parent_absolute_position.x + parent_absolute_size.x * position_x_scale + position.x.offset,
-        parent_absolute_position.y + parent_absolute_size.y * position_y_scale + position.y.offset
-    };
-    Vector2 absolute_size{
-        parent_absolute_size.x * size.x.scale + size.x.offset,
-        parent_absolute_size.y * size.y.scale + size.y.offset
-    };
+        const auto parent = getInstanceValue<std::shared_ptr<rbxInstance>>(instance, PROP_INSTANCE_PARENT);
+        const bool is_storage_child = isStorageChild(parent);
 
-    float absolute_rotation = parent_absolute_rotation + rotation;
+        // FIXME: separate function for pos&size calculations that only get called on parent changed?
+        // necessary so a newly-created guiobject's Absolute* values are accurate before render
+        auto parent_absolute_position = is_storage_child ? Vector2Zero : getInstanceValue<Vector2>(parent, "AbsolutePosition");
+        auto parent_absolute_size = is_storage_child ? rbxCamera::screen_size : getInstanceValue<Vector2>(parent, "AbsoluteSize");
+        // auto parent_absolute_rotation = is_storage_child ? 0.0f : getInstanceValue<float>(parent, "AbsoluteRotation");
 
-    setInstanceValue<Vector2>(instance, L, "AbsolutePosition", absolute_position);
-    setInstanceValue<Vector2>(instance, L, "AbsoluteSize", absolute_size);
-    setInstanceValue<float>(instance, L, "AbsoluteRotation", absolute_rotation);
+        auto& position = getInstanceValue<UDim2>(instance, "Position");
+        auto& size = getInstanceValue<UDim2>(instance, "Size");
+        float rotation = getInstanceValue<float>(instance, "Rotation");
 
-    if (!getInstanceValue<bool>(instance, "Visible"))
-        return;
+        auto position_x_scale = position.x.scale;
+        auto position_y_scale = position.y.scale;
 
-    auto background_color = getInstanceValue<Color>(instance, "BackgroundColor3");
-    {
-        auto position = auto_button_color_map.find(instance.get());
-        if (position != auto_button_color_map.end() && position->second) {
-            // TODO: hopefully optimize this
-            const auto& hsv = ColorToHSV(background_color);
-            background_color = ColorFromHSV(hsv.x, hsv.y, hsv.z / AUTO_BUTTON_COLOR_V);
+        Vector2 absolute_position{
+            parent_absolute_position.x + parent_absolute_size.x * position_x_scale + position.x.offset,
+            parent_absolute_position.y + parent_absolute_size.y * position_y_scale + position.y.offset
+        };
+        Vector2 absolute_size{
+            parent_absolute_size.x * size.x.scale + size.x.offset,
+            parent_absolute_size.y * size.y.scale + size.y.offset
+        };
+
+        // float absolute_rotation = parent_absolute_rotation + rotation;
+        float absolute_rotation = rotation;
+
+        setInstanceValue<Vector2>(instance, L, "AbsolutePosition", absolute_position);
+        setInstanceValue<Vector2>(instance, L, "AbsoluteSize", absolute_size);
+        setInstanceValue<float>(instance, L, "AbsoluteRotation", absolute_rotation);
+
+        if (!getInstanceValue<bool>(instance, "Visible"))
+            return;
+
+        auto background_color = getInstanceValue<Color>(instance, "BackgroundColor3");
+        {
+            auto position = auto_button_color_map.find(instance.get());
+            if (position != auto_button_color_map.end() && position->second) {
+                // TODO: hopefully optimize this
+                const auto& hsv = ColorToHSV(background_color);
+                background_color = ColorFromHSV(hsv.x, hsv.y, hsv.z / AUTO_BUTTON_COLOR_V);
+            }
+        }
+
+        background_color.a = (1 - getInstanceValue<float>(instance, "BackgroundTransparency")) * 255;
+
+        Rectangle shape_rect{
+            .x = absolute_position.x + absolute_size.x / 2.f,
+            .y = absolute_position.y + absolute_size.y / 2.f,
+            .width = absolute_size.x,
+            .height = absolute_size.y,
+        };
+        Vector2 shape_origin{absolute_size.x / 2.f, absolute_size.y / 2.f};
+
+        DrawRectanglePro(shape_rect, shape_origin, absolute_rotation, background_color);
+        // DrawRectanglePro(shape_rect, shape_origin, 0.f, background_color);
+
+        auto border_size = getInstanceValue<int>(instance, "BorderSizePixel");
+        if (border_size) {
+            auto border_color = getInstanceValue<Color>(instance, "BorderColor3");
+            border_color.a = background_color.a;
+
+            if (clips_descendants)
+                border_opt = GuiObjectBorder{ .position = absolute_position, .size = absolute_size, .rotation = absolute_rotation, .border_size = border_size, .border_color = border_color };
+            else
+                DrawRotatedRectangleLines(absolute_position, absolute_size, absolute_rotation, border_size, border_color);
+                // DrawRotatedRectangleLines(absolute_position, absolute_size, 0.f, border_size, border_color);
+        }
+
+        auto shape_lines = getRectangleLinesPro(shape_rect, shape_origin, absolute_rotation);
+        const bool is_mouse_over = !anyImGui && CheckCollisionPointPoly(mouse, shape_lines.data(), shape_lines.size());
+
+        auto& mouse_over_state = mouse_over_map[instance.get()];
+
+        if (is_mouse_over) {
+            next_gui_objects_hovered.push_back(instance);
+            if (instance->isA("GuiButton"))
+                next_clickable_instance = instance;
+        }
+
+        if (is_mouse_over != mouse_over_state)
+            (is_mouse_over ? mouse_enter_list : mouse_leave_list).push_back(instance);
+
+        mouse_over_state = is_mouse_over;
+    }
+
+    const auto child_count = instance->children.size();
+
+    if (child_count) {
+        if (clips_descendants)
+            // FIXME: this needs to happen AFTER EACH CHILD'S BeginTextureMode, so these things should probably be arguments to this function
+            // BeginScissorMode(clip_position.x, clip_position.y, clip_size.x, clip_size.y);
+            ;
+
+        std::lock_guard lock(instance->children_mutex);
+
+        std::vector<std::shared_ptr<rbxInstance>> sorted_children;
+
+        sorted_children.reserve(child_count);
+
+        sorted_children.insert(
+            sorted_children.end(),
+            instance->children.begin(),
+            instance->children.end()
+        );
+
+        // TODO: use a std::set if stable sort is still possible (see drawingimmediate)
+        // TODO: LayoutOrder?
+        std::stable_sort(sorted_children.begin(), sorted_children.end(), [] (std::shared_ptr<rbxInstance> a, std::shared_ptr<rbxInstance> b) {
+            return getInstanceValue<int>(a, "ZIndex") < getInstanceValue<int>(b, "ZIndex");
+        });
+
+        for (size_t i = 0; i < sorted_children.size(); i++)
+            renderGuiObject(L, sorted_children[i], mouse, anyImGui);
+
+        if (clips_descendants) {
+            // FIXME: see above
+            // EndScissorMode();
+            if (border_opt.has_value()) {
+                DrawRotatedRectangleLines(border_opt->position, border_opt->size, border_opt->rotation, border_opt->border_size, border_opt->border_color);
+                // DrawRotatedRectangleLines(border_opt->position, border_opt->size, 0.f, border_opt->border_size, border_opt->border_color);
+            }
         }
     }
-
-    background_color.a = (1 - getInstanceValue<float>(instance, "BackgroundTransparency")) * 255;
-
-    Rectangle shape_rect{
-        .x = absolute_position.x + absolute_size.x / 2.f,
-        .y = absolute_position.y + absolute_size.y / 2.f,
-        .width = absolute_size.x,
-        .height = absolute_size.y,
-    };
-    Vector2 shape_origin{absolute_size.x / 2.f, absolute_size.y / 2.f};
-    DrawRectanglePro(shape_rect, shape_origin, absolute_rotation, background_color);
-
-    auto border_size = getInstanceValue<int>(instance, "BorderSizePixel");
-    if (border_size) {
-        auto border_color = getInstanceValue<Color>(instance, "BorderColor3");
-        border_color.a = background_color.a;
-
-        DrawRotatedRectangleLines(absolute_position, absolute_size, rotation, border_size, border_color);
-    }
-
-    auto shape_lines = getRectangleLinesPro(shape_rect, shape_origin, absolute_rotation);
-    const bool is_mouse_over = !anyImGui && CheckCollisionPointPoly(mouse, shape_lines.data(), shape_lines.size());
-
-    auto& mouse_over_state = mouse_over_map[instance.get()];
-
-    if (is_mouse_over) {
-        next_gui_objects_hovered.push_back(instance);
-        if (instance->isA("GuiButton"))
-            next_clickable_instance = instance;
-    }
-
-    if (is_mouse_over != mouse_over_state)
-        (is_mouse_over ? mouse_enter_list : mouse_leave_list).push_back(instance);
-
-    mouse_over_state = is_mouse_over;
 }
 
 std::vector<std::shared_ptr<rbxInstance>> render_list;
 void contributeToRenderList(std::shared_ptr<rbxInstance> instance, bool is_storage = false) {
-    if (!is_storage) {
-        if (instance->isA("LayerCollector")) {
-            if (!getInstanceValue<bool>(instance, "Enabled"))
-                return;
-            goto ADD_CHILDREN;
-        }
+    // FIXME: verify child LayerCollector behavior in terms of DisplayOrder sorting. (if 'a' has higher DisplayOrder than 'b', but a layercollector 'c' parented to 'a' has a lower DisplayOrder than 'b', what happens?)
 
-        if (!instance->isA("GuiObject"))
+    if (!is_storage) {
+        if (!instance->isA("LayerCollector"))
+            return;
+        if (!getInstanceValue<bool>(instance, "Enabled"))
             return;
 
         render_list.push_back(instance);
     }
 
-    ADD_CHILDREN:
     std::lock_guard lock(instance->children_mutex);
     for (size_t i = 0; i < instance->children.size(); i++)
         contributeToRenderList(instance->children[i]);
@@ -215,7 +279,7 @@ void fireMouseMovementSignal(lua_State* L, Vector2& mouse, std::shared_ptr<rbxIn
     lua_call(L, 3, 0);
 }
 
-void rbxInstance_BasePlayerGui_process(lua_State *L, bool anyImGui) {
+void rbxInstance_BasePlayerGui_render(lua_State *L, bool anyImGui) {
     next_clickable_instance.reset();
     next_gui_objects_hovered.clear();
 
@@ -231,7 +295,7 @@ void rbxInstance_BasePlayerGui_process(lua_State *L, bool anyImGui) {
 
     // TODO: use a std::set if stable sort is still possible (see drawingimmediate)
     std::stable_sort(render_list.begin(), render_list.end(), [] (std::shared_ptr<rbxInstance> a, std::shared_ptr<rbxInstance> b) {
-        return getInstanceValue<int>(a, "ZIndex") < getInstanceValue<int>(b, "ZIndex");
+        return getInstanceValue<int>(a, "DisplayOrder") < getInstanceValue<int>(b, "DisplayOrder");
     });
 
     auto mouse = GetMousePosition();

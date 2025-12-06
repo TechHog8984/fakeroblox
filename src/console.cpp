@@ -1,4 +1,6 @@
 #include "console.hpp"
+#include "imgui.h"
+#include "raylib.h"
 
 #include <cstdarg>
 
@@ -70,8 +72,57 @@ void Console::renderMessages() {
             content.assign("[empty]");
             size = content.size();
         }
+        std::string popupid = "consolepopup";
+        popupid.append(std::to_string(i));
+
         ImGui::TextColored(color, "%.*s", static_cast<int>(size), content.c_str());
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
+            ImGui::OpenPopup(ImGui::GetID(popupid.c_str()));
+
+        if (ImGui::BeginPopup(popupid.c_str())) {
+            const bool copy = ImGui::Button("copy");
+            const bool any = copy;
+            if (copy)
+                SetClipboardText(content.c_str());
+
+            if (any)
+                ImGui::CloseCurrentPopup();
+
+            ImGui::EndPopup();
+        }
     }
+}
+// NOTE: not thread-safe
+std::string& Console::getWholeContent() {
+    whole_content.clear();
+
+    std::shared_lock lock(mutex);
+    for (size_t i = 0; i < messages.size(); i++) {
+        bool skip = false;
+        auto& message = messages[i];
+        switch (message.type) {
+            case Console::Message::INFO:
+                skip = !show_info;
+                break;
+            case Console::Message::WARNING:
+                skip = !show_warning;
+                break;
+            case Console::Message::ERROR:
+                skip = !show_error;
+                break;
+            case Console::Message::DEBUG:
+                skip = !show_debug;
+                break;
+        }
+        if (skip) continue;
+
+        whole_content.append(message.content);
+        whole_content += '\n';
+    }
+    if (whole_content.size())
+        whole_content.erase(whole_content.size() - 1, 1);
+
+    return whole_content;
 }
 
 void Console::log(std::string message, Message::Type type) {

@@ -370,8 +370,8 @@ int main(int argc, char** argv) {
         BeginDrawing();
         ClearBackground(DARKGRAY);
 
-        // gui object
-        rbxInstance_BasePlayerGui_process(appL, anyImGui);
+        // gui object render
+        rbxInstance_BasePlayerGui_render(appL, anyImGui);
 
         // lua drawings
         DrawEntry::render();
@@ -550,8 +550,14 @@ int main(int argc, char** argv) {
         }
         if (menu_console_open) {
             if (ImGui::Begin("Script Console", &menu_console_open)) {
-                if (ImGui::Button("Clear"))
+                const bool clear_button = ImGui::Button("Clear");
+                ImGui::SameLine();
+                const bool copytoclipboard_button = ImGui::Button("Copy Contents");
+
+                if (clear_button)
                     Console::ScriptConsole.clear();
+                else if (copytoclipboard_button)
+                    SetClipboardText(Console::ScriptConsole.getWholeContent().c_str());
                 else {
                     static const char* goto_text = "go to";
                     static const char* top_button_text = "top";
