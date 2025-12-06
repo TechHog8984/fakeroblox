@@ -8,6 +8,7 @@
 
 #include "classes/roblox/userinputservice.hpp"
 
+#include <chrono>
 #include <string>
 
 #include "Luau/Common.h"
@@ -155,6 +156,24 @@ static int fr_loadstring(lua_State* L) {
     lua_pushnil(L);
     lua_insert(L, -2); // put before error message
     return 2;          // return nil plus error message
+}
+
+// a wait implementation that isn't built into the task scheduler because Roblox also has a deprecated wait global used before the task scheduler was introduced
+// NOTE: the default value should be 0.03
+static int fr_wait(lua_State* L) {
+    const double seconds = getSeconds(L, 1);
+    auto before = std::chrono::system_clock::now();
+    auto end = std::chrono::system_clock::now() + std::chrono::duration<double>(seconds);
+
+    return TaskScheduler::yieldForWork(L, [before, end] (lua_State* thread) {
+        auto now = std::chrono::system_clock::now();
+        while (now < end)
+            now = std::chrono::system_clock::now();
+
+        lua_pushnumber(thread, static_cast<std::chrono::duration<double>>(now - before).count());
+        lua_pushnumber(thread, lua_clock() - TaskScheduler::initial_client_time);
+        return 2;
+    });
 }
 
 static int fr_gcstep(lua_State* L) {
@@ -358,6 +377,8 @@ void open_fakeroblox_environment(lua_State *L) {
     env_expose(getrendersteppedlist)
 
     env_expose(rawtostring)
+
+    env_expose(wait)
 
     env_expose(loadstring)
 
