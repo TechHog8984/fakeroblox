@@ -140,6 +140,8 @@ void tryRunCode(lua_State* L, const char* name, const char* code, size_t code_le
 Shader fakeroblox::round_shader;
 
 int main(int argc, char** argv) {
+    const double initial_game_time = lua_clock();
+
     if (argc < 1) {
         displayHelp();
         return 1;
@@ -179,6 +181,8 @@ int main(int argc, char** argv) {
         fprintf(stderr, "ERROR: failed to create folder at $HOME/fakeroblox/workspace\n");
         return 1;
     }
+
+    // FIXME: we need to pull assets from the repo if the assets folder doesn't exist!
 
     }
 
@@ -342,7 +346,8 @@ int main(int argc, char** argv) {
     }
 
     rlImGuiSetup(true);
-    const double initial_game_time = lua_clock();
+    TaskScheduler::initial_client_time = initial_game_time;
+
     while (!WindowShouldClose() && !DataModel::shutdown) {
         const bool anyImGui = ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow);
         if (enable_user_input_service)
@@ -545,9 +550,9 @@ int main(int argc, char** argv) {
         }
         if (menu_console_open) {
             if (ImGui::Begin("Script Console", &menu_console_open)) {
-                if (ImGui::Button("Clear")) {
+                if (ImGui::Button("Clear"))
                     Console::ScriptConsole.clear();
-                } else {
+                else {
                     static const char* goto_text = "go to";
                     static const char* top_button_text = "top";
                     static const char* bottom_button_text = "bottom";
@@ -566,21 +571,29 @@ int main(int argc, char** argv) {
                     ImGui::Checkbox("##info", &Console::ScriptConsole.show_info);
                     ImGui::SameLine();
                     ImGui::TextColored(Console::ColorINFO, "INFO");
+                    if (ImGui::IsItemClicked())
+                        Console::ScriptConsole.show_info ^= true;
                     ImGui::SameLine();
 
                     ImGui::Checkbox("##warning", &Console::ScriptConsole.show_warning);
                     ImGui::SameLine();
                     ImGui::TextColored(Console::ColorWARNING, "WARNING");
+                    if (ImGui::IsItemClicked())
+                        Console::ScriptConsole.show_warning ^= true;
                     ImGui::SameLine();
 
                     ImGui::Checkbox("##error", &Console::ScriptConsole.show_error);
                     ImGui::SameLine();
                     ImGui::TextColored(Console::ColorERROR, "ERROR");
+                    if (ImGui::IsItemClicked())
+                        Console::ScriptConsole.show_error ^= true;
                     ImGui::SameLine();
 
                     ImGui::Checkbox("##debug", &Console::ScriptConsole.show_debug);
                     ImGui::SameLine();
                     ImGui::TextColored(Console::ColorDEBUG, "DEBUG");
+                    if (ImGui::IsItemClicked())
+                        Console::ScriptConsole.show_debug ^= true;
 
                     ImGui::Separator();
 
