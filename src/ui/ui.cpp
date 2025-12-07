@@ -4,6 +4,21 @@
 
 namespace fakeroblox {
 
+bool show_fps = false;
+bool menu_editor_open = true;
+bool menu_console_open = true;
+bool menu_tests_open = false;
+bool menu_thread_list_open = false;
+bool menu_drawentry_list_open = false;
+bool menu_instance_explorer_open = false;
+bool menu_function_explorer_open = false;
+
+bool enable_user_input_service = true;
+bool enable_run_service = true;
+bool enable_tween_service = true;
+bool menu_image_explorer_open = false;
+bool menu_table_explorer_open = false;
+
 int imgui_inputTextCallback(ImGuiInputTextCallbackData* data) {
     if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
         std::string* str = (std::string*) data->UserData;

@@ -2,7 +2,6 @@
 #include "classes/roblox/datatypes/rbxscriptconnection.hpp"
 
 #include "common.hpp"
-#include "lstate.h"
 #include "taskscheduler.hpp"
 
 #include "lua.h"
@@ -169,7 +168,7 @@ int fireRBXScriptSignalWithFilter(lua_State* L) {
         int function_index = connection->function_index;
         lua_remove(L, -1);
 
-        lua_getfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
+        lua_getfield(L, LUA_REGISTRYINDEX, RBXSCRIPTCONNECTION_METHODLOOKUP);
         lua_rawgeti(L, -1, function_index); // function
         lua_remove(L, -2);
 

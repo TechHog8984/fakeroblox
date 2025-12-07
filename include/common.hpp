@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <shared_mutex>
 #include <string>
 #include <cstring> // for strcmp for strequal
 
@@ -92,6 +93,7 @@ int pushFromSharedPtrLookup(lua_State* L, const char* lookup, std::shared_ptr<T>
 
 #define INSTANCELOOKUP "instancelookup"
 #define METHODLOOKUP "methodlookup"
+#define RBXSCRIPTCONNECTION_METHODLOOKUP "rbxscriptconnectionmethodlookup"
 // TODO: I don't think we use the string lookup for any non-static strings, so it should be removed which will become easily when we get rid of redundant std::string uses
 #define STRINGLOOKUP "stringlookup"
 #define SIGNALLOOKUP "signallookup"

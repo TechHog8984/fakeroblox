@@ -157,6 +157,8 @@ public:
     std::shared_mutex destroyed_mutex;
     std::shared_mutex parent_locked_mutex;
 
+    // static lua_State* destructorL;
+
     rbxInstance(std::shared_ptr<rbxClass> _class);
     ~rbxInstance();
 

@@ -1,6 +1,7 @@
 #include "classes/roblox/datatypes/rbxscriptconnection.hpp"
 #include "common.hpp"
 
+#include "lapi.h"
 #include "lua.h"
 #include "lualib.h"
 
@@ -10,13 +11,24 @@ void rbxScriptConnection::destroy(lua_State* L) {
     if (!alive)
         return;
 
-    // FIXME: we can't directly do this for situations such as the same function being used for two connections;
-    // we need to employ behavior similar to shared_ptr here.
-    // Perhaps METHODLOOKUP's array will be used to store a method's designated count.
-    // When a count hits zero, then we do this.
-    lua_getfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
-    lua_pushnil(L);
-    lua_rawseti(L, -2, function_index);
+    lua_getfield(L, LUA_REGISTRYINDEX, RBXSCRIPTCONNECTION_METHODLOOKUP);
+
+    lua_rawgeti(L, -1, function_index);
+    lua_pushvalue(L, -1);
+    lua_rawget(L, -3);
+    double n = luaL_checknumber(L, -1);
+    lua_pop(L, 1);
+    n--;
+    if (n) {
+        lua_pushnumber(L, n);
+        lua_rawset(L, -3);
+    } else {
+        lua_pushnil(L);
+        lua_rawset(L, -3);
+
+        lua_pushnil(L);
+        lua_rawseti(L, -2, function_index);
+    }
     lua_pop(L, 1);
 
     alive = false;
@@ -29,8 +41,28 @@ int pushNewRBXScriptConnection(lua_State* L, std::function<void()> pushValue) {
     luaL_getmetatable(L, "RBXScriptConnection");
     lua_setmetatable(L, -2);
 
-    lua_getfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
-    connection->function_index = addToLookup(L, pushValue, false);
+    lua_getfield(L, LUA_REGISTRYINDEX, RBXSCRIPTCONNECTION_METHODLOOKUP);
+    connection->function_index = addToLookup(L, pushValue, true);
+
+    lua_getfield(L, LUA_REGISTRYINDEX, RBXSCRIPTCONNECTION_METHODLOOKUP);
+
+    lua_insert(L, -2);
+    lua_pushvalue(L, -1);
+
+    lua_rawget(L, -3);
+    if (lua_isnil(L, -1)) {
+        lua_pop(L, 1);
+        lua_pushnumber(L, 1);
+        lua_rawset(L, -3);
+    } else {
+        // TODO: more efficient way of doing this?
+        double value = luaL_checknumber(L, -1) + 1;
+        lua_pop(L, 1);
+        lua_pushnumber(L, value);
+        lua_rawset(L, -3);
+    }
+
+    lua_pop(L, 1);
 
     return 1;
 }

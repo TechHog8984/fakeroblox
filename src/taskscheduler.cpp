@@ -16,6 +16,7 @@
 #include "lua.h"
 #include "luacode.h"
 #include "lualib.h"
+#include "lgc.h"
 
 namespace fakeroblox {
 
@@ -73,22 +74,44 @@ void TaskScheduler::setTargetFps(int target) {
 }
 
 std::shared_mutex TaskScheduler::gc_mutex;
-bool TaskScheduler::pauseGarbageCollection(lua_State* L) {
+bool TaskScheduler::gcShouldRun(lua_State* L) {
     std::lock_guard lock(gc_mutex);
 
-    bool was_running = lua_gc(L, LUA_GCISRUNNING, 0);
+    return lua_gc(L, LUA_GCISRUNNING, 0);
+}
+bool TaskScheduler::gcActuallyPaused(lua_State* L) {
+    return L->global->gcstate == GCSpause;
+}
+void TaskScheduler::gcCollect(lua_State* L) {
+    std::lock_guard lock(gc_mutex);
 
     lua_gc(L, LUA_GCCOLLECT, 0);
+}
+void TaskScheduler::pauseGarbageCollection(lua_State* L) {
+    std::lock_guard lock(gc_mutex);
 
     lua_gc(L, LUA_GCSTOP, 0);
-
-    return was_running;
 }
 void TaskScheduler::resumeGarbageCollection(lua_State* L) {
     std::lock_guard lock(gc_mutex);
 
     lua_gc(L, LUA_GCRESTART, 0);
 }
+
+void TaskScheduler::performGCWork(lua_State* L, std::function<void()> work) {
+    const bool resume_gc = !gcActuallyPaused(L);
+    if (resume_gc)
+        gcCollect(L);
+
+    pauseGarbageCollection(L);
+
+    work();
+
+    if (resume_gc)
+        resumeGarbageCollection(L);
+}
+
+lua_State* TaskScheduler::mainL = nullptr;
 
 std::vector<lua_State*> TaskScheduler::thread_list;
 std::shared_mutex TaskScheduler::thread_list_mutex;
@@ -97,6 +120,8 @@ std::vector<lua_State*> TaskScheduler::thread_queue;
 std::shared_mutex TaskScheduler::thread_queue_mutex;
 
 void TaskScheduler::setup(lua_State *L) {
+    mainL = L;
+
     lua_callbacks(L)->userthread = [] (lua_State* parent, lua_State* thread) {
         if (parent) {
             Task* task = new Task();
@@ -361,6 +386,8 @@ void TaskScheduler::run() {
 }
 
 void TaskScheduler::cleanup() {
+    mainL = nullptr;
+
     std::lock_guard lock(thread_list_mutex);
 
     for (size_t i = 0; i < thread_list.size(); i++)

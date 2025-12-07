@@ -9,8 +9,6 @@ namespace fakeroblox {
 
 class rbxScriptConnection {
 public:
-    ~rbxScriptConnection() { printf("what...."); }
-
     bool alive = true;
     int function_index;
 

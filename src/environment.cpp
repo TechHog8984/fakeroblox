@@ -36,63 +36,60 @@ static int fr_getreg(lua_State* L) {
     return 1;
 }
 static int fr_getgc(lua_State* L) {
-    const bool resume_gc = TaskScheduler::pauseGarbageCollection(L);
+    TaskScheduler::performGCWork(L, [&L] {
+        struct VisitUserdata_t {
+            bool tables;
+            std::vector<GCObject*> list;
+        } VisitUserdata;
+        VisitUserdata.tables = luaL_optboolean(L, 1, 0);
 
-    struct VisitUserdata_t {
-        bool tables;
-        std::vector<GCObject*> list;
-    } VisitUserdata;
-    VisitUserdata.tables = luaL_optboolean(L, 1, 0);
+        luaM_visitgco(L, &VisitUserdata, [](void* ud, lua_Page* page, GCObject* object) {
+            auto visit_ud = static_cast<VisitUserdata_t*>(ud);
 
-    luaM_visitgco(L, &VisitUserdata, [](void* ud, lua_Page* page, GCObject* object) {
-        auto visit_ud = static_cast<VisitUserdata_t*>(ud);
-
-        if (object->gch.tt == LUA_TTABLE && !visit_ud->tables)
-            goto RET;
-
-        switch (object->gch.tt) {
-            case LUA_TTABLE:
-            case LUA_TFUNCTION:
-            case LUA_TUSERDATA:
-            case LUA_TTHREAD:
-                break;
-            default:
+            if (object->gch.tt == LUA_TTABLE && !visit_ud->tables)
                 goto RET;
+
+            switch (object->gch.tt) {
+                case LUA_TTABLE:
+                case LUA_TFUNCTION:
+                case LUA_TUSERDATA:
+                case LUA_TTHREAD:
+                    break;
+                default:
+                    goto RET;
+            }
+
+            visit_ud->list.push_back(object);
+
+            RET:
+            return false;
+        });
+
+        createweaktable(L, VisitUserdata.list.size(), 0);
+
+        for (size_t i = 0; i < VisitUserdata.list.size(); i++) {
+            auto& obj = VisitUserdata.list[i];
+            lua_pushnil(L);
+            auto new_value = const_cast<TValue*>(luaA_toobject(L, -1));
+            switch (obj->gch.tt) {
+                case LUA_TTABLE:
+                    sethvalue(L, new_value, gco2h(obj));
+                    break;
+                case LUA_TFUNCTION:
+                    setclvalue(L, new_value, gco2cl(obj));
+                    break;
+                case LUA_TUSERDATA:
+                    setuvalue(L, new_value, gco2u(obj));
+                    break;
+                case LUA_TTHREAD:
+                    setthvalue(L, new_value, gco2th(obj));
+                    break;
+                default:
+                    LUAU_UNREACHABLE();
+            }
+            lua_rawseti(L, -2, i + 1);
         }
-
-        visit_ud->list.push_back(object);
-
-        RET:
-        return false;
     });
-
-    createweaktable(L, VisitUserdata.list.size(), 0);
-
-    for (size_t i = 0; i < VisitUserdata.list.size(); i++) {
-        auto& obj = VisitUserdata.list[i];
-        lua_pushnil(L);
-        auto new_value = const_cast<TValue*>(luaA_toobject(L, -1));
-        switch (obj->gch.tt) {
-            case LUA_TTABLE:
-                sethvalue(L, new_value, gco2h(obj));
-                break;
-            case LUA_TFUNCTION:
-                setclvalue(L, new_value, gco2cl(obj));
-                break;
-            case LUA_TUSERDATA:
-                setuvalue(L, new_value, gco2u(obj));
-                break;
-            case LUA_TTHREAD:
-                setthvalue(L, new_value, gco2th(obj));
-                break;
-            default:
-                LUAU_UNREACHABLE();
-        }
-        lua_rawseti(L, -2, i + 1);
-    }
-
-    if (resume_gc)
-        TaskScheduler::resumeGarbageCollection(L);
 
     return 1;
 }
@@ -359,6 +356,9 @@ void open_fakeroblox_environment(lua_State *L) {
     // methodlookup
     lua_newtable(L);
     lua_setfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
+    // rbxscriptconnection_methodlookup
+    lua_newtable(L);
+    lua_setfield(L, LUA_REGISTRYINDEX, RBXSCRIPTCONNECTION_METHODLOOKUP);
 
     // string list
     lua_newtable(L);

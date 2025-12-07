@@ -87,14 +87,21 @@ public:
 
     static void setup(lua_State* L);
 
+    static lua_State* mainL;
+
     static std::vector<lua_State*> thread_list;
     static std::shared_mutex thread_list_mutex;
 
     static int target_fps;
     static void setTargetFps(int target);
 
-    static bool pauseGarbageCollection(lua_State* L);
+    static bool gcShouldRun(lua_State* L);
+    static bool gcActuallyPaused(lua_State* L);
+    static void gcCollect(lua_State* L);
+    static void pauseGarbageCollection(lua_State* L);
     static void resumeGarbageCollection(lua_State* L);
+
+    static void performGCWork(lua_State* L, std::function<void()> work);
 
     static lua_State* newThread(lua_State* L, Feedback feedback, OnKill on_kill = nullptr);
     static void killThread(lua_State* thread);

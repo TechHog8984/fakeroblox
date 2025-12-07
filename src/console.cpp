@@ -80,7 +80,7 @@ void Console::renderMessages() {
             ImGui::OpenPopup(ImGui::GetID(popupid.c_str()));
 
         if (ImGui::BeginPopup(popupid.c_str())) {
-            const bool copy = ImGui::Button("copy");
+            const bool copy = ImGui::Button("Copy");
             const bool any = copy;
             if (copy)
                 SetClipboardText(content.c_str());

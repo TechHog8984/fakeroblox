@@ -10,6 +10,22 @@
 
 namespace fakeroblox {
 
+// window items
+extern bool show_fps;
+extern bool menu_editor_open;
+extern bool menu_console_open;
+extern bool menu_tests_open;
+extern bool menu_thread_list_open;
+extern bool menu_drawentry_list_open;
+extern bool menu_instance_explorer_open;
+extern bool menu_function_explorer_open;
+
+extern bool enable_user_input_service;
+extern bool enable_run_service;
+extern bool enable_tween_service;
+extern bool menu_image_explorer_open;
+extern bool menu_table_explorer_open;
+
 int imgui_inputTextCallback(ImGuiInputTextCallbackData* data);
 
 bool ImGui_STDString(const char* label, std::string& string);

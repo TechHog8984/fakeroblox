@@ -24,6 +24,7 @@
 
 #include "common.hpp"
 
+#include "console.hpp"
 #include "taskscheduler.hpp"
 #include "ui/instanceexplorer.hpp"
 
@@ -66,13 +67,37 @@ std::shared_mutex rbxInstance::instance_list_mutex;
 
 rbxInstance::rbxInstance(std::shared_ptr<rbxClass> _class) : _class(_class) {}
 
+// lua_State* rbxInstance::destructorL = nullptr;
+
 rbxInstance::~rbxInstance() {
+    Console::ScriptConsole.debug("destroying instance...");
+
+    /*
+    // FIXME: we need to free events at some point, but the below code doesn't work because L is not guaranteed to allowstack manipulation
+
+    // #define killEvent(event) {                               \
+    //     pushEvent(destructorL, event);                                 \
+    //     lua_checkrbxscriptsignal(destructorL, -1)->~rbxScriptSignal(); \
+    //     lua_pop(destructorL, 1);                                       \
+    // }
+
+    // if (destructorL)
+    //     for (auto& event : events)
+    //         killEvent(event.c_str())
+    */
+
     rbxClass* c = _class.get();
     while (c) {
+        // if (destructorL)
+        //     for (auto& property : c->properties)
+        //         killEvent(property.first.c_str());
+
         if (c->destructor)
             c->destructor(this);
         c = c->superclass.get();
     }
+
+    // #undef killEvent
 }
 
 bool rbxInstance::isA(rbxClass* target_class) {
@@ -132,6 +157,15 @@ void destroyInstance(lua_State* L, std::shared_ptr<rbxInstance> instance, bool d
         pushFunctionFromLookup(L, disconnectAllRBXScriptSignal);
         instance->pushEvent(L, event.c_str());
         lua_call(L, 1, 0);
+    }
+    rbxClass* c = instance->_class.get();
+    while (c) {
+        for (auto& property : c->properties) {
+            pushFunctionFromLookup(L, disconnectAllRBXScriptSignal);
+            instance->pushEvent(L, property.first.c_str());
+            lua_call(L, 1, 0);
+        }
+        c = c->superclass.get();
     }
 
     setInstanceParent(L, instance, nullptr, dont_remove_from_old_parent_children);
@@ -1062,6 +1096,8 @@ static int fr_gethui(lua_State* L) {
 }
 
 void rbxInstanceSetup(lua_State* L, std::string api_dump) {
+    // rbxInstance::destructorL = TaskScheduler::newThread(L, [] (std::string error) { Console::ScriptConsole.error(error); });
+
     // instancelookup
     newweaktable(L);
     lua_setfield(L, LUA_REGISTRYINDEX, INSTANCELOOKUP);
