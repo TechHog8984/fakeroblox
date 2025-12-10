@@ -8,7 +8,7 @@ namespace rbxInstance_Players_methods {
     static int getPlayers(lua_State* L) {
         lua_checkinstance(L, 1, "Players");
 
-        lua_createtable(L, 1, 0);
+        createweaktable(L, 1, 0);
         lua_pushinstance(L, rbxPlayer::localplayer);
         lua_rawseti(L, -2, 1);
 

@@ -785,7 +785,7 @@ void open_drawentrylib(lua_State *L) {
     // metatable
     luaL_newmetatable(L, "DrawEntry");
 
-    lua_newtable(L);
+    newweaktable(L);
     lua_setfield(L, -2, "objects");
 
     setfunctionfield(L, DrawEntry__tostring, "__tostring");

@@ -97,7 +97,7 @@ static int fr_getgc(lua_State* L) {
 static int fr_getallthreads(lua_State* L) {
     std::shared_lock lock(TaskScheduler::thread_list_mutex);
 
-    lua_createtable(L, TaskScheduler::thread_list.size(), 0);
+    createweaktable(L, TaskScheduler::thread_list.size(), 0);
     for (size_t i = 0; i < TaskScheduler::thread_list.size();i ++) {
         lua_State* thread = TaskScheduler::thread_list[i];
         // hack because I don't want to bring over api_incr_top
@@ -116,7 +116,7 @@ static int fr_getrendersteppedlist(lua_State* L) {
     LuaTable* table = hvalue(luaA_toobject(L, 1));
     const int item_count = luaH_getn(table);
 
-    lua_createtable(L, item_count, 0);
+    createweaktable(L, item_count, 0);
 
     int i = 0;
     lua_pushnil(L);

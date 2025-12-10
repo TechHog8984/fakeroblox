@@ -666,7 +666,7 @@ void setInstanceParent(lua_State* L, std::shared_ptr<rbxInstance> instance, std:
 static int fr_getinstances(lua_State* L) {
     std::lock_guard lock(rbxInstance::instance_list_mutex);
 
-    lua_newtable(L);
+    newweaktable(L);
 
     for (size_t i = 0; i < rbxInstance::instance_list.size(); i++) {
         auto child = rbxInstance::instance_list[i].lock();
@@ -699,7 +699,7 @@ std::vector<std::weak_ptr<rbxInstance>> getNilInstances() {
 static int fr_getnilinstances(lua_State* L) {
     auto nil_instances = getNilInstances();
 
-    lua_newtable(L);
+    newweaktable(L);
 
     for (size_t i = 0; i < nil_instances.size(); i++) {
         auto child = nil_instances[i].lock();
