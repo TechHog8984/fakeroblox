@@ -101,7 +101,7 @@ static int fr_getallthreads(lua_State* L) {
     for (size_t i = 0; i < TaskScheduler::thread_list.size();i ++) {
         lua_State* thread = TaskScheduler::thread_list[i];
         // hack because I don't want to bring over api_incr_top
-        lua_pushboolean(L, false);
+        lua_pushnil(L);
         setthvalue(L, L->top - 1, thread);
         lua_rawseti(L, -2, i + 1);
     }

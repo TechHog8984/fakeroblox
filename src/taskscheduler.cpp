@@ -146,6 +146,7 @@ void TaskScheduler::setup(lua_State *L) {
             std::lock_guard lock(TaskScheduler::thread_list_mutex);
             TaskScheduler::thread_list.push_back(thread);
         } else {
+            killThread(thread);
             Task* task = getTask(thread);
             delete task;
             lua_setthreaddata(thread, nullptr);
