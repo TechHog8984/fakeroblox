@@ -1,6 +1,6 @@
 # fakeroblox
 
-fakeroblox is an attempt to create a Luau environment that is as close to Roblox's as possible.
+fakeroblox is an attempt to create a Luau scripting engine that is as close to Roblox's as possible.
 
 creation date: Jun 25, 2025
 
