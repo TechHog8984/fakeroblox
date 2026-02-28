@@ -1108,6 +1108,29 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
     json api_json = json::parse(api_dump);
     rbxClass::valid_class_names.reserve(api_json["Classes"].size());
 
+    for (auto& enum_json : api_json["Enums"]) {
+        std::string enum_name = enum_json["Name"].template get<std::string>();
+
+        Enum enums;
+        enums.name = enum_name;
+
+        for (auto& item_json : enum_json["Items"]) {
+            std::string item_name = item_json["Name"].template get<std::string>();
+            unsigned int item_value = item_json["Value"].template get<int>();
+
+            EnumItem item;
+            item.name = item_name;
+            item.enum_name = enum_name;
+            item.value = item_value;
+
+            enums.item_map[item_name] = item;
+        }
+
+        Enum::enum_map[enum_name] = enums;
+    }
+
+    setup_enums(L);
+
     std::map<std::string, std::string> superclass_map;
 
     for (auto& class_json : api_json["Classes"]) {
@@ -1134,6 +1157,18 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
         for (auto& member_json : class_json["Members"]) {
             std::string member_name = member_json["Name"].template get<std::string>();
             std::string member_type = member_json["MemberType"].template get<std::string>();
+
+            bool default_exists = false;
+            std::string default_value;
+            {
+            auto j = member_json["Default"];
+            default_exists = j.is_string();
+            if (default_exists) {
+                default_value.assign(j.template get<std::string>());
+                if (default_value.substr(0, 10) == "__api_dump")
+                    default_exists = false;
+            }
+            }
 
             auto& tags = member_json["Tags"];
             if (member_type == "Property") {
@@ -1164,23 +1199,32 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
                     property->default_value = rbxValue();
 
                     if (type == "bool") {
-                        property->default_value.value = false;
+                        property->default_value.value = default_exists ? default_value == "true" : false;
                     } else if (type == "int") {
-                        property->default_value.value = int32_t(0);
+                        property->default_value.value = default_exists ? std::stoi(default_value) : int32_t(0);
                     } else if (type == "int64") {
-                        property->default_value.value = int64_t(0);
+                        property->default_value.value = default_exists ? std::stoll(default_value) : int64_t(0);
                     } else if (type == "float") {
-                        property->default_value.value = float(0.0);
+                        property->default_value.value = default_exists ? std::stof(default_value) : float(0.0);
                     } else if (type == "double") {
-                        property->default_value.value = double(0.0);
+                        property->default_value.value = default_exists ? std::stod(default_value) : double(0.0);
                     } else if (type == "string") {
-                        property->default_value.value = "";
+                        property->default_value.value = default_exists ? default_value : "";
                     }
                 } else if (category == "Enum") {
                     property->type_category = DataType;
                     property->default_value = rbxValue();
 
-                    property->default_value.value = EnumItemWrapper { .name = "", .enum_name = member_name };
+                    std::string item_name;
+                    if (default_exists)
+                        item_name = default_value;
+                    else {
+                        try {
+                            item_name = getEnumItemFromValue(type.c_str(), 0).name;
+                        } catch(std::exception& e) {}
+                    }
+
+                    property->default_value.value = EnumItemWrapper { .name = item_name, .enum_name = type };
                 } else if (category == "DataType") {
                     property->type_category = DataType;
                     property->default_value = rbxValue();
@@ -1250,29 +1294,6 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
         rbxClass::class_map[pair.first]->superclass = rbxClass::class_map[pair.second];
 
     superclass_map.clear();
-
-    for (auto& enum_json : api_json["Enums"]) {
-        std::string enum_name = enum_json["Name"].template get<std::string>();
-
-        Enum enums;
-        enums.name = enum_name;
-
-        for (auto& item_json : enum_json["Items"]) {
-            std::string item_name = item_json["Name"].template get<std::string>();
-            unsigned int item_value = item_json["Value"].template get<int>();
-
-            EnumItem item;
-            item.name = item_name;
-            item.enum_name = enum_name;
-            item.value = item_value;
-
-            enums.item_map[item_name] = item;
-        }
-
-        Enum::enum_map[enum_name] = enums;
-    }
-
-    setup_enums(L);
 
     rbxClass::class_map["Instance"]->methods.at("ClearAllChildren").func = rbxInstance_methods::clearAllChildren;
     rbxClass::class_map["Instance"]->methods.at("Clone").func = rbxInstance_methods::clone;
