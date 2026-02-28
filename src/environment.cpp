@@ -409,6 +409,7 @@ void open_fakeroblox_environment(lua_State *L) {
 
     setfunctionfield(L, DrawEntry__index, "getrenderproperty");
     setfunctionfield(L, DrawEntry__newindex, "setrenderproperty");
+    setfunctionfield(L, fr_isrenderobject, "isrenderobject");
 
     setfunctionfield(L, fireRBXScriptSignal, "firesignal");
 

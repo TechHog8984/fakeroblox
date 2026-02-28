@@ -184,6 +184,9 @@ double luaL_optnumberrange(lua_State* L, int narg, double min, double max, const
 
 // from Luau/VM/src/laux.cpp
 bool getUdataReal(lua_State* L, void*& out, int ud, const char* tname) {
+    if (lua_isnone(L, ud))
+        return false;
+
     const TValue* o = luaA_toobject(L, ud);
     if (ttype(o) != LUA_TUSERDATA || uvalue(o)->tag == UTAG_PROXY)
         return false;

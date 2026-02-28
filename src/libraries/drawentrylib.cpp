@@ -752,6 +752,24 @@ static int DrawEntry__namecall(lua_State* L) {
 
     return func(L);
 }
+int fr_isrenderobject(lua_State *L) {
+    if (!lua_isuserdata(L, 1))
+        luaL_typeerrorL(L, 1, "userdata");
+
+    const bool is = luaL_isudatareal(L, 1, "DrawEntry");
+
+    if (!lua_isnone(L, 2)) {
+        const char* class_name = luaL_checkstring(L, 2);
+        if (is) {
+            const auto entry = static_cast<DrawEntry*>(lua_touserdata(L, 1));
+            lua_pushboolean(L, strequal(entry->class_name, class_name));
+            return 1;
+        }
+    }
+
+    lua_pushboolean(L, is);
+    return 1;
+}
 
 void open_drawentrylib(lua_State *L) {
     // Drawing global

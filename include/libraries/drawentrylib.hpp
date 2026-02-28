@@ -159,4 +159,6 @@ int DrawEntry__index(lua_State* L);
 int DrawEntry__newindex(lua_State* L);
 void open_drawentrylib(lua_State* L);
 
+int fr_isrenderobject(lua_State* L);
+
 }; // namespace fakeroblox
