@@ -34,6 +34,12 @@ CURLcode performRequest(CURL* curl, struct MemoryStruct* chunk, const char* meth
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*) chunk);
 
+    struct curl_slist* headers = NULL;
+    headers = curl_slist_append(headers, "User-Agent: Roblox/WinInet");
+    headers = curl_slist_append(headers, "Roblox-Game-Id: abcdefg");
+    headers = curl_slist_append(headers, "Roblox-Session-Id: {\"GameId\": abcdefg}");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
 
     res = curl_easy_perform(curl);
