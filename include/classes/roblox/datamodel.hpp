@@ -2,7 +2,7 @@
 
 #include "classes/roblox/instance.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class DataModel {
 public:
@@ -15,4 +15,4 @@ public:
 
 void rbxInstance_DataModel_init(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

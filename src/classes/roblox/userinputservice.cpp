@@ -18,7 +18,7 @@
 #include <queue>
 #include <stdexcept>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 void genericFire(lua_State* L, std::shared_ptr<rbxInstance> instance, const char* event, std::function<int(void)> pushArgs) {
     pushFunctionFromLookup(L, fireRBXScriptSignal);
@@ -553,4 +553,4 @@ void rbxInstance_UserInputService_init() {
     rbxClass::class_map["UserInputService"]->methods["IsMouseButtonPressed"].func = rbxInstance_UserInputService_methods::isMouseButtonPressed;
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

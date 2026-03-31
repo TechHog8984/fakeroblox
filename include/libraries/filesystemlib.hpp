@@ -3,7 +3,7 @@
 #include "lua.h"
 #include <string>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class FileSystem {
 public:
@@ -13,4 +13,4 @@ public:
 
 void open_filesystemlib(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

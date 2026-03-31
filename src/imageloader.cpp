@@ -1,7 +1,7 @@
 #include "imageloader.hpp"
 #include "common.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::map<std::string, Image*> ImageLoader::hash_image_map;
 

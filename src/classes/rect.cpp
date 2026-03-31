@@ -9,7 +9,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 int pushRect(lua_State* L, float minx, float miny, float maxx, float maxy) {
     Rect* rect = static_cast<Rect*>(lua_newuserdata(L, sizeof(Rect)));
@@ -113,4 +113,4 @@ void open_rectlib(lua_State *L) {
     lua_pop(L, 1);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

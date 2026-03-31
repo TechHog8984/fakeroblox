@@ -15,7 +15,7 @@
 #include "lapi.cpp"
 #include "Luau/Bytecode.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 bool enable_stephook = false;
 
@@ -482,4 +482,4 @@ void onEnableStephookChange(lua_State* L) {
         lua_callbacks(L)->debugstep = nullptr;
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

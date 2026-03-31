@@ -17,7 +17,7 @@
 
 #include <memory>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 #define SELECTED_FUNCTION_KEY "functionexplorerselectedfunction"
 
@@ -246,4 +246,4 @@ void UI_FunctionExplorer_render(lua_State *L) {
     });
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

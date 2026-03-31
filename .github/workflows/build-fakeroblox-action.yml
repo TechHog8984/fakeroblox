@@ -1,4 +1,4 @@
-name: Build FakeRoblox
+name: Build frostbyte
 on: [push]
 jobs:
   Build:
@@ -64,18 +64,18 @@ jobs:
         run: echo "value=$(date +'%F_%H-%M-%S')" >> $GITHUB_OUTPUT
       - name: create tag
         run: |
-          git tag fakeroblox-ubuntu-${{ steps.timestamp.outputs.value }}
-          git push origin fakeroblox-ubuntu-${{ steps.timestamp.outputs.value }}
+          git tag frostbyte-ubuntu-${{ steps.timestamp.outputs.value }}
+          git push origin frostbyte-ubuntu-${{ steps.timestamp.outputs.value }}
       - name: create release
-        id: create_fakeroblox_release
+        id: create_frostbyte_release
         uses: softprops/action-gh-release@v2
         with:
-          name: Release fakeroblox ubuntu ${{ steps.timestamp.outputs.value }}
-          tag_name: fakeroblox-ubuntu-${{ steps.timestamp.outputs.value }}
+          name: Release frostbyte ubuntu ${{ steps.timestamp.outputs.value }}
+          tag_name: frostbyte-ubuntu-${{ steps.timestamp.outputs.value }}
           body: ${{ github.sha }}
           draft: false
           prerelease: true
-          files: build/fakeroblox
+          files: build/frostbyte
           token: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       contents: write

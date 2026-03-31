@@ -14,7 +14,7 @@
 
 using json = nlohmann::json;
 
-namespace fakeroblox {
+namespace frostbyte {
 
 // NOTE: this is hard-coded sorry
 #define MAX_KEYBOARD_KEYS 512
@@ -118,4 +118,4 @@ void settypemetafield(lua_State* L, const char* type);
 
 std::string sha1ToString(unsigned int* hashed);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

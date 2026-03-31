@@ -2,7 +2,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 struct NumberRange {
     float min;
@@ -17,4 +17,4 @@ NumberRange* lua_checknumberrange(lua_State* L, int index);
 
 void open_numberrangelib(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

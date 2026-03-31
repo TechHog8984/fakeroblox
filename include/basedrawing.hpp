@@ -3,7 +3,7 @@
 #include "raylib.h"
 #include <string_view>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 extern Shader round_shader;
 
@@ -78,4 +78,4 @@ inline void drawingDrawCenteredText(Vector2* position, Font* font, float text_si
 
 #pragma GCC diagnostic pop
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

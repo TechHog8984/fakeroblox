@@ -7,7 +7,7 @@
 #include "imgui.h"
 #include "luaconf.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 enum ConsoleId {
     Script,
@@ -68,4 +68,4 @@ public:
     void LUA_PRINTF_ATTR(2, 3) errorf(const char* fmt, ...);
 };
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

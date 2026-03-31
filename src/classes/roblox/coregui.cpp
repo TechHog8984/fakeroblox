@@ -1,7 +1,7 @@
 #include "classes/roblox/coregui.hpp"
 #include "classes/udim2.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::shared_ptr<rbxInstance> CoreGui::notification_frame;
 
@@ -21,4 +21,4 @@ void rbxInstance_CoreGui_setup(lua_State* L, std::shared_ptr<rbxInstance> instan
     CoreGui::notification_frame = notification_frame;
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

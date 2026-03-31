@@ -2,7 +2,7 @@
 
 // CREDITS TO luau/Ast/include/Luau/Ast.h
 
-namespace fakeroblox {
+namespace frostbyte {
 
 extern int type_registry_index;
 
@@ -19,4 +19,4 @@ const int TypeRegistration<T>::value = ++type_registry_index;
         return TypeRegistration<Class>::value; \
     }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

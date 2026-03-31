@@ -8,7 +8,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class FontLoader {
 public:
@@ -27,4 +27,4 @@ public:
     static size_t getFont(unsigned char* data, int data_size);
 };
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

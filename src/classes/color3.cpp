@@ -7,7 +7,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 int pushColor(lua_State* L, double r, double g, double b) {
     Color* color = static_cast<Color*>(lua_newuserdata(L, sizeof(Color)));
@@ -224,4 +224,4 @@ void open_color3lib(lua_State *L) {
     lua_pop(L, 1);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

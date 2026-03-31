@@ -2,7 +2,7 @@
 #include "classes/roblox/guibutton.hpp"
 #include "classes/roblox/instance.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 void rbxInstance_GuiObject_init() {
     auto& this_class = rbxClass::class_map["GuiObject"];
@@ -17,4 +17,4 @@ void rbxInstance_GuiObject_init() {
     rbxInstance_GuiButton_init();
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

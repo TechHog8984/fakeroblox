@@ -13,7 +13,7 @@
 #include <variant>
 #include <vector>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::vector<std::shared_ptr<rbxInstance>> TweenService::active_tween_list;
 std::shared_mutex TweenService::active_tween_list_mutex;
@@ -607,4 +607,4 @@ void rbxInstance_TweenService_init() {
     rbxClass::class_map["TweenService"]->methods["GetValue"].func = rbxInstance_TweenService_static_methods::getValue;
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

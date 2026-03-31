@@ -16,7 +16,7 @@
 
 #define SELECTED_TABLE_KEY "tablestuffselectedtable"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 static constexpr float INDENT = 20;
 
@@ -205,4 +205,4 @@ void UI_TableExplorer_render(lua_State *L) {
     });
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

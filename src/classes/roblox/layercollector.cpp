@@ -1,7 +1,7 @@
 #include "classes/roblox/layercollector.hpp"
 #include "classes/roblox/instance.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 void rbxInstance_LayerCollector_init() {
     rbxClass::class_map["LayerCollector"]->constructor = [](lua_State* L, std::shared_ptr<rbxInstance> instance) {
@@ -9,4 +9,4 @@ void rbxInstance_LayerCollector_init() {
     };
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

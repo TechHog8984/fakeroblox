@@ -3,7 +3,7 @@
 #include "classes/roblox/instance.hpp"
 #include "tween_functions.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 struct Tween {
     bool active;
@@ -50,4 +50,4 @@ public:
 
 void rbxInstance_TweenService_init();
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

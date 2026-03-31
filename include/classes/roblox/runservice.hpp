@@ -3,7 +3,7 @@
 #include "classes/roblox/instance.hpp"
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 #define BINDLIST_KEY "renderstepbindlist"
 
@@ -15,4 +15,4 @@ public:
 
 void rbxInstance_RunService_init(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

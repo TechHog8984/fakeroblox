@@ -18,7 +18,7 @@
 #include "lualib.h"
 #include "lgc.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 const char* taskStatusTostring(TaskStatus status) {
     switch (status) {
@@ -581,4 +581,4 @@ void open_tasklib(lua_State *L) {
     lua_setglobal(L, "task");
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

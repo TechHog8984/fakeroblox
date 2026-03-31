@@ -5,7 +5,7 @@
 
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 UUIDv4::UUIDGenerator<std::mt19937_64> uuid_generator;
 
@@ -32,4 +32,4 @@ void rbxInstance_HttpService_init() {
     rbxClass::class_map["HttpService"]->methods["GenerateGUID"].func = rbxInstance_HttpService_methods::generateGUID;
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

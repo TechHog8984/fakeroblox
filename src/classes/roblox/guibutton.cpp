@@ -1,6 +1,6 @@
 #include "classes/roblox/guibutton.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::map<rbxInstance*, bool> auto_button_color_map;
 
@@ -44,4 +44,4 @@ void handleGuiButtonMouseLeave(std::shared_ptr<rbxInstance> instance) {
     auto_button_color_map[instance.get()] = false;
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

@@ -5,7 +5,7 @@
 
 #include "raylib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 Image* cloneImage(Image* original);
 
@@ -20,4 +20,4 @@ public:
     static void unload();
 };
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

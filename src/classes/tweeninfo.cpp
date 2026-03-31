@@ -5,7 +5,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 int pushTweenInfo(lua_State* L, TweenInfo tweeninfo) {
     TweenInfo* new_tweeninfo = static_cast<TweenInfo*>(lua_newuserdatatagged(L, sizeof(TweenInfo), LUA_TAG_TWEENINFO));
@@ -123,4 +123,4 @@ void open_tweeninfolib(lua_State *L) {
     });
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

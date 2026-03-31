@@ -2,7 +2,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 struct Rect {
     float minx;
@@ -17,4 +17,4 @@ Rect* lua_checkrect(lua_State* L, int narg);
 
 void open_rectlib(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

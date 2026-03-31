@@ -21,10 +21,10 @@
 #include "lobject.h"
 #include "lstate.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 static int fr_identifyexecutor(lua_State* L) {
-    lua_pushstring(L, "fakeroblox");
+    lua_pushstring(L, "frostbyte");
     // TODO: actual version?
     lua_pushstring(L, "v1");
 
@@ -302,7 +302,7 @@ static int fr_setwindowtitle(lua_State* L) {
 
 static int fr_getgenv(lua_State* L) {
     if (TaskScheduler::sandboxing)
-        luaL_error(L, "you cannot use getgenv while sandboxing is enabled! rerun fakeroblox with the --nosandbox flag");
+        luaL_error(L, "you cannot use getgenv while sandboxing is enabled! rerun frostbyte with the --nosandbox flag");
 
     // TODO: should this be environindex ?? i have no idea
     lua_pushvalue(L, LUA_GLOBALSINDEX);
@@ -352,7 +352,7 @@ static int fr_tick(lua_State* L) {
     return 1;
 }
 
-void open_fakeroblox_environment(lua_State *L) {
+void open_frostbyte_environment(lua_State *L) {
     // methodlookup
     lua_newtable(L);
     lua_setfield(L, LUA_REGISTRYINDEX, METHODLOOKUP);
@@ -436,4 +436,4 @@ void open_fakeroblox_environment(lua_State *L) {
     lua_pop(L, 1);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

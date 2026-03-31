@@ -7,7 +7,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::shared_ptr<rbxInstance> RunService::instance;
 
@@ -138,4 +138,4 @@ void rbxInstance_RunService_init(lua_State* L) {
     rbxClass::class_map["RunService"]->methods["UnbindFromRenderStep"].func = rbxInstance_RunService_methods::unbindFromRenderStep;
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

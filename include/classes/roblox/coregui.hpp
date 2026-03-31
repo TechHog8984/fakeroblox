@@ -2,7 +2,7 @@
 
 #include "classes/roblox/instance.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class CoreGui {
 public:
@@ -11,4 +11,4 @@ public:
 
 void rbxInstance_CoreGui_setup(lua_State* L, std::shared_ptr<rbxInstance> instance);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

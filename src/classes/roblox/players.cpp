@@ -2,7 +2,7 @@
 #include "classes/roblox/player.hpp"
 #include "classes/roblox/serviceprovider.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 namespace rbxInstance_Players_methods {
     static int getPlayers(lua_State* L) {
@@ -23,4 +23,4 @@ void rbxInstance_Players_init(lua_State* L, std::shared_ptr<rbxInstance> datamod
     rbxInstance_Player_init(L, players_service);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

@@ -2,9 +2,9 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 void UI_ImageExplorer_render(lua_State* L);
 void UI_ImageExplorer_cleanup();
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

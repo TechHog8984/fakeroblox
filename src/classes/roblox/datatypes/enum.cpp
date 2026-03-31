@@ -4,7 +4,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::map<std::string, Enum> Enum::enum_map;
 
@@ -232,4 +232,4 @@ void setup_enums(lua_State* L) {
     lua_setuserdatadtor(L, LUA_TAG_ENUMITEM, EnumItem__dtor);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

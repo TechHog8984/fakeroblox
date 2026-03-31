@@ -1,6 +1,6 @@
 #include "classes/roblox/camera.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 Vector2 rbxCamera::screen_size{0, 0};
 std::shared_ptr<rbxInstance> camera;
@@ -23,4 +23,4 @@ void rbxInstance_Camera_init(lua_State *L, std::shared_ptr<rbxInstance> workspac
     setInstanceValue(workspace, L, "CurrentCamera", camera);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

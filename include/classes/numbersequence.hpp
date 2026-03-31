@@ -4,7 +4,7 @@
 #include "lua.h"
 #include <vector>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 struct NumberSequence {
     std::vector<NumberSequenceKeypoint> keypoint_list;
@@ -18,4 +18,4 @@ NumberSequence* lua_checknumbersequence(lua_State* L, int index);
 
 void open_numbersequencelib(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

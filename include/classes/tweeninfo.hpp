@@ -2,7 +2,7 @@
 
 #include "classes/roblox/datatypes/enum.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 struct TweenInfo {
     EnumItemWrapper easing_direction{ .name = "Out", .enum_name = "EasingDirection" };
@@ -18,4 +18,4 @@ TweenInfo* lua_checktweeninfo(lua_State* L, int narg);
 
 void open_tweeninfolib(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

@@ -6,7 +6,7 @@
 #include "common.hpp"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::shared_ptr<rbxInstance> notification_frame_title_template;
 std::shared_ptr<rbxInstance> notification_frame_text_template;
@@ -82,4 +82,4 @@ void rbxInstance_StarterGui_init(lua_State* L) {
     getInstanceValue<EnumItemWrapper>(notification_frame_text_template, "TextYAlignment").name = "Top";
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

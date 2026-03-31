@@ -15,7 +15,7 @@
 #include "lnumutils.h"
 #include "lstate.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 bool print_stdout = false;
 
@@ -383,4 +383,4 @@ std::string sha1ToString(unsigned int *hashed) {
     return result;
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

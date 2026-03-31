@@ -4,7 +4,7 @@
 #include "classes/roblox/datatypes/rbxscriptsignal.hpp"
 #include "classes/roblox/instance.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 namespace rbxInstance_BindableEvent_methods {
     static int fire(lua_State* L) {
@@ -23,4 +23,4 @@ void rbxInstance_BindableEvent_init() {
     rbxClass::class_map["BindableEvent"]->methods.at("Fire").func = rbxInstance_BindableEvent_methods::fire;
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

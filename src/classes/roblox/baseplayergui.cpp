@@ -18,7 +18,7 @@
 #include <cmath>
 #include <mutex>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::vector<std::shared_ptr<rbxInstance>> gui_storage_list;
 

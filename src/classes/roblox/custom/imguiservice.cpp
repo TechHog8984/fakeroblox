@@ -23,7 +23,7 @@
 
 #include <memory>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 namespace ImGuiService_methods {
     static int begin(lua_State* L) {
@@ -212,4 +212,4 @@ void ImGuiService_render(lua_State *L) {
     lua_call(L, 1, 0);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

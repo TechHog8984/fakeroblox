@@ -8,7 +8,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 Image* chosen_image = nullptr;
 bool texture_is_loaded = false;
@@ -59,4 +59,4 @@ void UI_ImageExplorer_cleanup() {
         UnloadTexture(*loaded_texture);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

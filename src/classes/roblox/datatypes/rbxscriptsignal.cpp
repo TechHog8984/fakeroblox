@@ -7,7 +7,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 int pushNewRBXScriptSignal(lua_State* L, std::string name) {
     lua_getfield(L, LUA_REGISTRYINDEX, SIGNALCONNECTIONLISTLOOKUP);
@@ -243,4 +243,4 @@ void setup_rbxScriptSignal(lua_State *L) {
     setup_rbxScriptConnection(L);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

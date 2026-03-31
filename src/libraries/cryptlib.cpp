@@ -6,7 +6,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 static int fr_base64encode(lua_State* L) {
     size_t input_size;
@@ -36,4 +36,4 @@ void open_cryptlib(lua_State* L) {
     lua_setglobal(L, "crypt");
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

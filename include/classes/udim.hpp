@@ -2,7 +2,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 struct UDim {
     float scale;
@@ -17,4 +17,4 @@ UDim* lua_checkudim(lua_State* L, int index);
 
 void open_udimlib(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

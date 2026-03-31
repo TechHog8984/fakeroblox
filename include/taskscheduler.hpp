@@ -8,7 +8,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 enum TaskStatus {
     IDLE,
@@ -130,4 +130,4 @@ void open_tasklib(lua_State* L);
 
 int fr_task_spawn(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

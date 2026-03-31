@@ -4,7 +4,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 struct UDim2 {
     UDim x;
@@ -17,4 +17,4 @@ UDim2* lua_checkudim2(lua_State* L, int narg);
 
 void open_udim2lib(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

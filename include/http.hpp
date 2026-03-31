@@ -3,7 +3,7 @@
 #include <cstddef>
 #include "curl/curl.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 struct MemoryStruct {
     char *memory;

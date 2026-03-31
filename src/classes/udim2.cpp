@@ -5,7 +5,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 int pushUDim2(lua_State* L, UDim x, UDim y) {
     UDim2* udim2 = static_cast<UDim2*>(lua_newuserdata(L, sizeof(UDim2)));
@@ -166,4 +166,4 @@ void open_udim2lib(lua_State *L) {
     lua_pop(L, 1);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

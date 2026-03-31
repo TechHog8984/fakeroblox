@@ -5,7 +5,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 void rbxScriptConnection::destroy(lua_State* L) {
     if (!alive)
@@ -150,4 +150,4 @@ void setup_rbxScriptConnection(lua_State *L) {
     lua_pop(L, 1);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

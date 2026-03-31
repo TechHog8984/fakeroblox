@@ -2,8 +2,8 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 void open_cachelib(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

@@ -1,6 +1,6 @@
-# fakeroblox
+# frostbyte
 
-fakeroblox is an attempt to create a Luau scripting engine that is as close to Roblox's as possible.
+frostbyte is an attempt to create a Luau scripting engine that is as close to Roblox's as possible.
 
 creation date: Jun 25, 2025
 
@@ -15,9 +15,9 @@ In addition, I am frequently making drastic changes on my local machine before p
 Issues, however, usually closely match the project's real state.
 
 # BUILDING
-NOTE: fakeroblox CURRENTLY does _not_ have a process for building neither for or on Windows. It is likely possible to cross compile via mingw, but that would require manual steps.
+NOTE: frostbyte CURRENTLY does _not_ have a process for building neither for or on Windows. It is likely possible to cross compile via mingw, but that would require manual steps.
 
-fakeroblox uses [mate.h](https://github.com/TomasBorquez/mate.h/) for its core build system, along with some python files to build the dependencies.
+frostbyte uses [mate.h](https://github.com/TomasBorquez/mate.h/) for its core build system, along with some python files to build the dependencies.
 <br>
 To build dependencies, first ensure you have their respective dependencies installed. You can usually find this on each project page, but here is a command you can run on Ubuntu for reference:
 ```bash

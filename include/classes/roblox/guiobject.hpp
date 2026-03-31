@@ -1,7 +1,7 @@
 #pragma once
 
-namespace fakeroblox {
+namespace frostbyte {
 
 void rbxInstance_GuiObject_init();
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

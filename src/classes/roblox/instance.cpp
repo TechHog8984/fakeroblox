@@ -41,7 +41,7 @@
 #include <memory>
 #include <variant>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::map<std::string, std::shared_ptr<rbxClass>> rbxClass::class_map;
 std::vector<std::string> rbxClass::valid_class_names;
@@ -1334,7 +1334,7 @@ void rbxInstanceSetup(lua_State* L, std::string api_dump) {
     rbxInstance_HttpService_init();
 
     auto datamodel = newInstance(L, "DataModel");
-    setInstanceValue<std::string>(datamodel, L, PROP_INSTANCE_NAME, "FakeRoblox");
+    setInstanceValue<std::string>(datamodel, L, PROP_INSTANCE_NAME, "frostbyte");
 
     DataModel::instance = datamodel;
 
@@ -1402,4 +1402,4 @@ void rbxInstanceCleanup(lua_State* L) {
 
 std::shared_ptr<rbxInstance> hiddenui = nullptr;
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

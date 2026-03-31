@@ -7,7 +7,7 @@ static constexpr double pi = M_PI;
 static constexpr double pihalf = M_PI / 2.0;
 static constexpr double pidouble = M_PI * 2.0;
 
-namespace fakeroblox {
+namespace frostbyte {
 
 // t, b, c, d
 typedef double (*TweenFunction)(double elapsed, double from, double delta, double duration);
@@ -258,4 +258,4 @@ createAlpha(easeInCubic)
 createAlpha(easeOutCubic)
 createAlpha(easeInOutCubic)
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

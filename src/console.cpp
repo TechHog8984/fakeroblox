@@ -4,7 +4,7 @@
 
 #include <cstdarg>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 Console::Console(ConsoleId id, bool show_info, bool show_warning, bool show_error, bool show_debug)
     : id(id), show_info(show_info), show_warning(show_warning), show_error(show_error), show_debug(show_debug) {};
@@ -173,4 +173,4 @@ void Console::debugf(const char* fmt, ...) internal_logf(Message::DEBUG)
 
 #undef internal_logf
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

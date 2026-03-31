@@ -2,7 +2,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 struct NumberSequenceKeypoint {
     float envelope;
@@ -18,4 +18,4 @@ NumberSequenceKeypoint* lua_checknumbersequencekeypoint(lua_State* L, int index)
 
 void open_numbersequencekeypointlib(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

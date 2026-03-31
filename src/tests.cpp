@@ -10,11 +10,11 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
     int canSpawnLuaFunction(lua_State* L);
     int canSpawnCFunction(lua_State* L);
 
-    FakeRobloxTest test_list[] = {
+    FrostByteTest test_list[] = {
         { .name = "can spawn lua function", .value = canSpawnLuaFunction },
         { .name = "can spawn C function", .value = canSpawnCFunction },
 
@@ -289,4 +289,4 @@ namespace fakeroblox {
     }
 
     #undef PASS
-}; // namespace fakeroblox
+}; // namespace frostbyte

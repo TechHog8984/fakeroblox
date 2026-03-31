@@ -4,7 +4,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 enum InputState {
     InputBegan,
@@ -23,4 +23,4 @@ public:
 
 void rbxInstance_UserInputService_init();
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

@@ -4,7 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 /* credits START: https://stackoverflow.com/questions/27007379/how-do-i-get-response-value-using-curl-in-c/27007490#27007490 */
 

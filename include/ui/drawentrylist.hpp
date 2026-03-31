@@ -2,8 +2,8 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 void UI_DrawEntryList_render(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

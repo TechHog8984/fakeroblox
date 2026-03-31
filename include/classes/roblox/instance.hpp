@@ -29,7 +29,7 @@
 
 // Instance is the base class of all objects. We may adapt to Roblox's choice of an Object abstraction in the future.
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class rbxProperty;
 
@@ -420,4 +420,4 @@ namespace rbxInstance_datatype {
 
 extern std::shared_ptr<rbxInstance> hiddenui;
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

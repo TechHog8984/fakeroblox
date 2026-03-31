@@ -4,7 +4,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 int pushNumberSequenceKeypoint(lua_State* L, float envelope, float time, float value) {
     NumberSequenceKeypoint* numbersequencekeypoint = static_cast<NumberSequenceKeypoint*>(lua_newuserdata(L, sizeof(NumberSequenceKeypoint)));
@@ -94,4 +94,4 @@ void open_numbersequencekeypointlib(lua_State *L) {
     lua_pop(L, 1);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

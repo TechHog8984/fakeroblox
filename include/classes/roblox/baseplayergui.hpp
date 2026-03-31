@@ -6,7 +6,7 @@
 
 #include <initializer_list>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::weak_ptr<rbxInstance> getClickableGuiObject();
 std::vector<std::weak_ptr<rbxInstance>> getGuiObjectsHovered();

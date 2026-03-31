@@ -2,8 +2,8 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 void rbxInstance_StarterGui_init(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

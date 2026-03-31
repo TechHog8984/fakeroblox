@@ -1,6 +1,6 @@
 #pragma once
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class HttpService {
 public:
@@ -8,4 +8,4 @@ public:
 
 void rbxInstance_HttpService_init();
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

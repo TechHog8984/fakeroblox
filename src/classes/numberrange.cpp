@@ -4,7 +4,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 int pushNumberRange(lua_State* L, float min, float max) {
     NumberRange* numberrange = static_cast<NumberRange*>(lua_newuserdata(L, sizeof(NumberRange)));
@@ -93,4 +93,4 @@ void open_numberrangelib(lua_State *L) {
     lua_pop(L, 1);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

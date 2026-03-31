@@ -8,7 +8,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 int pushVector2(lua_State* L, float x, float y) {
     Vector2* vector2 = static_cast<Vector2*>(lua_newuserdata(L, sizeof(Vector2)));
@@ -188,4 +188,4 @@ void open_vector2lib(lua_State *L) {
     lua_pop(L, 1);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

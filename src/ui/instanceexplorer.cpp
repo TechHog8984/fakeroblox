@@ -7,7 +7,7 @@
 
 #include <queue>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::shared_ptr<rbxInstance> game;
 
@@ -286,4 +286,4 @@ void UI_InstanceExplorer_render(lua_State *L) {
     ImGui::EndChild();
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

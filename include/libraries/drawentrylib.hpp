@@ -8,7 +8,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class DrawEntry {
 public:
@@ -161,4 +161,4 @@ void open_drawentrylib(lua_State* L);
 
 int fr_isrenderobject(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

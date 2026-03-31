@@ -2,7 +2,7 @@
 
 #include <string>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 bool show_fps = false;
 bool menu_editor_open = true;
@@ -93,4 +93,4 @@ void ImGui_DragUDim2(const char* name, UDim2& udim2, float speed, float min, flo
     udim2.y.offset = v[3];
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

@@ -2,7 +2,7 @@
 
 #include "classes/roblox/instance.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class Workspace {
 public:
@@ -12,4 +12,4 @@ public:
 
 void rbxInstance_Workspace_init(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

@@ -5,7 +5,7 @@
 #include <cstdio>
 #include <functional>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class rbxScriptConnection {
 public:

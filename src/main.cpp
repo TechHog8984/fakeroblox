@@ -61,7 +61,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-using namespace fakeroblox;
+using namespace frostbyte;
 
 int handleRecordOption(const char* option, const char*& arg, bool can_be_empty = false) {
     size_t option_length = strlen(option);
@@ -120,7 +120,7 @@ void pushNewScriptEditorTab(std::string contents) {
     script_editor_tab_list.push_back({true, true, name, contents});
 }
 void pushNewScriptEditorTab() {
-    pushNewScriptEditorTab("print'fakeroblox on top'");
+    pushNewScriptEditorTab("print'frostbyte on top'");
 }
 
 std::string script_editor_save_path;
@@ -137,7 +137,7 @@ void tryRunCode(lua_State* L, const char* name, const char* code, size_t code_le
     }
 }
 
-Shader fakeroblox::round_shader;
+Shader frostbyte::round_shader;
 
 int main(int argc, char** argv) {
     const double initial_game_time = lua_clock();
@@ -169,17 +169,17 @@ int main(int argc, char** argv) {
     }
 
     FileSystem::home_path = std::string(user_home);
-    FileSystem::home_path.append("/fakeroblox/");
+    FileSystem::home_path.append("/frostbyte/");
 
     FileSystem::workspace_path.assign(FileSystem::home_path);
     FileSystem::workspace_path.append("workspace/");
 
     if (!std::filesystem::exists(FileSystem::home_path) && !std::filesystem::create_directory(FileSystem::home_path)) {
-        fprintf(stderr, "ERROR: failed to create folder at $HOME/fakeroblox\n");
+        fprintf(stderr, "ERROR: failed to create folder at $HOME/frostbyte\n");
         return 1;
     }
     if (!std::filesystem::exists(FileSystem::workspace_path) && !std::filesystem::create_directory(FileSystem::workspace_path)) {
-        fprintf(stderr, "ERROR: failed to create folder at $HOME/fakeroblox/workspace\n");
+        fprintf(stderr, "ERROR: failed to create folder at $HOME/frostbyte/workspace\n");
         return 1;
     }
 
@@ -193,7 +193,7 @@ int main(int argc, char** argv) {
         path.append("assets/Full-API-Dump.json");
         api_dump.assign(readFileToString(path.c_str()));
     } catch (std::exception& e) {
-        fprintf(stderr, "ERROR: failed to read $HOME/fakeroblox/assets/Full-API-Dump.json: %s\n", e.what());
+        fprintf(stderr, "ERROR: failed to read $HOME/frostbyte/assets/Full-API-Dump.json: %s\n", e.what());
         return 1;
     }
 
@@ -206,7 +206,7 @@ int main(int argc, char** argv) {
 
     Console::ScriptConsole.debugf("main state: %p", L);
 
-    open_fakeroblox_environment(L);
+    open_frostbyte_environment(L);
 
     open_filesystemlib(L);
     open_color3lib(L);
@@ -243,7 +243,7 @@ int main(int argc, char** argv) {
 
     SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    InitWindow(800, 600, "fakeroblox");
+    InitWindow(800, 600, "frostbyte");
     SetExitKey(KEY_NULL);
     SetTargetFPS(TaskScheduler::target_fps);
 

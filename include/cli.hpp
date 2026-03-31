@@ -1,7 +1,7 @@
 #pragma once
 
-namespace fakeroblox {
+namespace frostbyte {
 
-void displayHelp(const char* filename = "fakeroblox");
+void displayHelp(const char* filename = "frostbyte");
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

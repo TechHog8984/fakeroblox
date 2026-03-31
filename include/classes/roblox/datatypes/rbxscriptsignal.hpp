@@ -7,7 +7,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class rbxScriptSignal {
 public:
@@ -28,4 +28,4 @@ int disconnectAllRBXScriptSignal(lua_State* L);
 
 void setup_rbxScriptSignal(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

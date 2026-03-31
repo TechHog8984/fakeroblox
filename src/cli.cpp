@@ -2,10 +2,10 @@
 
 #include "cli.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 void displayHelp(const char* filename) {
-    printf("fakeroblox by techhog\n"
+    printf("frostbyte by techhog\n"
         "usage: %s [options]\n\n"
         "options:\n"
         "  -h           -  displays this page\n"
@@ -13,4 +13,4 @@ void displayHelp(const char* filename) {
     , filename);
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

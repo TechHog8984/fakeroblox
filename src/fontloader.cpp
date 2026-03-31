@@ -2,7 +2,7 @@
 #include "common.hpp"
 #include "libraries/filesystemlib.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 lua_State* FontLoader::L = nullptr;
 size_t FontLoader::font_count = 5;

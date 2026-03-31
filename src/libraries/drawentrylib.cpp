@@ -15,7 +15,7 @@
 #include <raylib.h>
 #include <shared_mutex>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::vector<DrawEntry*> DrawEntry::draw_list;
 std::shared_mutex DrawEntry::draw_list_mutex;
@@ -915,4 +915,4 @@ void DrawEntry::render() {
     }
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

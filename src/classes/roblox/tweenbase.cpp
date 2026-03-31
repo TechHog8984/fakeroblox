@@ -2,7 +2,7 @@
 #include "classes/roblox/instance.hpp"
 #include "classes/roblox/tweenservice.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 namespace rbxInstance_TweenBase_methods {
     static int cancel(lua_State* L) {
@@ -35,4 +35,4 @@ void rbxInstance_TweenBase_init() {
     rbxClass::class_map["TweenBase"]->methods["Pause"].func = rbxInstance_TweenBase_methods::pause;
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

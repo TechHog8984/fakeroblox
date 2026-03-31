@@ -9,7 +9,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::shared_ptr<rbxInstance> DataModel::instance;
 bool DataModel::shutdown = false;

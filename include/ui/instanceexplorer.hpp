@@ -4,10 +4,10 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 void UI_InstanceExplorer_init(std::shared_ptr<rbxInstance> datamodel);
 
 void UI_InstanceExplorer_render(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

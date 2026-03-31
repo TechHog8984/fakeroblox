@@ -5,7 +5,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 int pushColorSequence(lua_State* L, const std::vector<ColorSequenceKeypoint>& keypoint_list) {
     ColorSequence* colorsequence = static_cast<ColorSequence*>(lua_newuserdatatagged(L, sizeof(ColorSequence), LUA_TAG_COLOR_SEQUENCE));
@@ -142,4 +142,4 @@ void open_colorsequencelib(lua_State *L) {
     });
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

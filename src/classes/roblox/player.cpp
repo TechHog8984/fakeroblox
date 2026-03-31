@@ -1,7 +1,7 @@
 #include "classes/roblox/player.hpp"
 #include "classes/roblox/instance.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::shared_ptr<rbxInstance> rbxPlayer::localplayer;
 std::shared_ptr<rbxInstance> rbxPlayer::localmouse;
@@ -24,4 +24,4 @@ void rbxInstance_Player_init(lua_State *L, std::shared_ptr<rbxInstance> players_
     players_service->values["LocalPlayer"].value = rbxPlayer::localplayer;
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

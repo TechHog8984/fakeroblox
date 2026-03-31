@@ -5,7 +5,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class EnumItem {
 public:
@@ -36,4 +36,4 @@ EnumItem* lua_checkenumitem(lua_State* L, int narg, const char* expected_enum = 
 
 void setup_enums(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

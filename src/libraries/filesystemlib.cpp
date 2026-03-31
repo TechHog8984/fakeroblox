@@ -10,7 +10,7 @@
 #include <sstream>
 #include <string_view>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::string FileSystem::home_path;
 std::string FileSystem::workspace_path;
@@ -179,4 +179,4 @@ void open_filesystemlib(lua_State* L) {
     env_expose(delfolder)
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

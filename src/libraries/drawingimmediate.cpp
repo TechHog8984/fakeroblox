@@ -13,7 +13,7 @@
 #include <set>
 #include <unordered_set>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 struct PaintEvent {
     int zindex;
@@ -232,4 +232,4 @@ void render_drawingimmediate(lua_State* L) {
     }
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

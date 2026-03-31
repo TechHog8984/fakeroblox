@@ -3,7 +3,7 @@
 #include "classes/roblox/instance.hpp"
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class rbxPlayer {
 public:
@@ -13,4 +13,4 @@ public:
 
 void rbxInstance_Player_init(lua_State* L, std::shared_ptr<rbxInstance> players_service);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

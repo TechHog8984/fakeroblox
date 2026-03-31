@@ -1,6 +1,6 @@
 #include "classes/roblox/workspace.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::shared_ptr<rbxInstance> Workspace::instance;
 

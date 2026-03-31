@@ -3,7 +3,7 @@
 #include "lua.h"
 #include <raylib.h>
 
-namespace fakeroblox {
+namespace frostbyte {
 
 struct ColorSequenceKeypoint {
     float time;
@@ -18,4 +18,4 @@ ColorSequenceKeypoint* lua_checkcolorsequencekeypoint(lua_State* L, int index);
 
 void open_colorsequencekeypointlib(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

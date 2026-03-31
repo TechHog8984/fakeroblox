@@ -7,7 +7,7 @@
 
 #include "libraries/drawentrylib.hpp"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 DrawEntry* drawentry_list_chosen = nullptr;
 
@@ -221,4 +221,4 @@ void UI_DrawEntryList_render(lua_State *L) {
     }
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

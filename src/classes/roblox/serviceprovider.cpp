@@ -5,7 +5,7 @@
 
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 std::map<std::string, std::shared_ptr<rbxInstance>> ServiceProvider::service_map;
 
@@ -64,4 +64,4 @@ void rbxInstance_ServiceProvider_init(lua_State *L) {
   
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

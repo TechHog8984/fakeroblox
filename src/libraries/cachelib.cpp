@@ -5,7 +5,7 @@
 #include "lua.h"
 #include "lualib.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 int fr_cache_invalidate(lua_State* L) {
     auto instance = lua_checkinstance(L, 1);
@@ -89,4 +89,4 @@ void open_cachelib(lua_State* L) {
     env_expose(compareinstances)
 }
 
-}; // namespace fakeroblox
+}; // namespace frostbyte

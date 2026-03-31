@@ -4,7 +4,7 @@
 
 #include "lua.h"
 
-namespace fakeroblox {
+namespace frostbyte {
 
 class ServiceProvider {
 public:
@@ -18,4 +18,4 @@ public:
 
 void rbxInstance_ServiceProvider_init(lua_State* L);
 
-}; // namespace fakeroblox
+}; // namespace frostbyte
